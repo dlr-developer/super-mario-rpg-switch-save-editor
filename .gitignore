@@ -1,0 +1,14 @@
+# Personal save backups made by the editor
+backups/
+
+# Python
+__pycache__/
+*.pyc
+
+# Build output (PyInstaller)
+build/
+dist/
+*.spec
+
+# Save files should never be committed
+SMR_Save_Ver*
