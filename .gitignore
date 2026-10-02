@@ -1,5 +1,9 @@
-# Personal save backups made by the editor
+# Personal save backups made by the editor (never commit these)
 backups/
+**/backups/
+
+# Built app: attach it to a GitHub Release instead of committing it
+*.exe
 
 # Python
 __pycache__/

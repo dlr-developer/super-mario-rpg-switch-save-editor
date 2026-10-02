@@ -9,6 +9,7 @@ Equipment stats: Nintendo Life, Gamer Guides, Samurai Gamers, Super Mario Wiki.
 """
 import copy
 import glob
+import hashlib
 import json
 import os
 import re
@@ -130,11 +131,20 @@ CHAR_FIELDS = [
     ("_magic_defence", "Magic Defense", 0, 255),
 ]
 
-ITEM_MAX_STACK = 99
-CAT_HEAL = "Usable in field + battle"
-CAT_FIELD = "Field only"
-CAT_BATTLE = "Battle item"
-CATEGORIES = [CAT_HEAL, CAT_FIELD, CAT_BATTLE]
+CARRY_MAX = 30     # per item; extra goes to the Storage Box at Mario's Pad
+STORAGE_MAX = 99
+FIELD_ONLY = (99, 100, 101)   # Flower Tab/Jar/Box raise max FP; not in the battle menu
+
+
+def is_recovery(i):
+    """The game files 87–101 and 126–130 under Recovery, everything else under Battle."""
+    return 87 <= i <= 101 or 126 <= i <= 130
+
+
+def menu_label(i):
+    if i in FIELD_ONLY:
+        return "Recovery (menu only)"
+    return "Recovery" if is_recovery(i) else "Battle"
 
 
 def item_name(i):
@@ -151,14 +161,6 @@ def gear_label(i):
     stats = GEAR.get(i, (None, None, (0,) * 5))[2]
     bits = [f"{n} {v:+d}" for n, v in zip(("Atk", "Def", "MgAtk", "MgDef", "Spd"), stats) if v]
     return f"{item_label(i)}" + (f"   ({', '.join(bits)})" if bits else "")
-
-
-def default_category(i):
-    if i in (99, 100, 101):          # Flower Tab/Jar/Box raise max FP, used from the menu
-        return CAT_FIELD
-    if 87 <= i <= 98 or 126 <= i <= 130:
-        return CAT_HEAL
-    return CAT_BATTLE
 
 
 def star_count(flags):
@@ -278,6 +280,24 @@ def store_settings(settings):
         pass
 
 
+def backup_time(name):
+    """When a backup was made, from its folder name (YYYY-MM-DD_HH-MM-SS …)."""
+    try:
+        return datetime.strptime(name[:19], "%Y-%m-%d_%H-%M-%S")
+    except ValueError:
+        path = os.path.join(BACKUP_DIR, name)
+        return datetime.fromtimestamp(os.path.getmtime(path)) if os.path.exists(path) else None
+
+
+def age_text(delta):
+    s = max(0, int(delta.total_seconds()))
+    for size, unit in ((86400, "day"), (3600, "hour"), (60, "minute")):
+        if s >= size:
+            n = s // size
+            return f"{n} {unit}{'s' if n != 1 else ''}"
+    return "less than a minute"
+
+
 def open_folder(path):
     if sys.platform == "win32":
         os.startfile(path)
@@ -316,11 +336,10 @@ def describe_changes(old, new):
         a, b = before.get(i, 0), after.get(i, 0)
         if a != b:
             note = "  (new)" if not a else "  (removed)" if not b else ""
-            out.append(("Items", f"{item_name(i)}: {a} → {b}{note}"))
-    battle_old = set(ordered_counts(oi["_battle_menu_item_list"]))
-    battle_new = set(ordered_counts(ni["_battle_menu_item_list"]))
-    for i in sorted((battle_old ^ battle_new) & set(before) & set(after)):
-        out.append(("Items", f"{item_name(i)}: {'now' if i in battle_new else 'no longer'} usable in battle"))
+            out.append(("Items carried", f"{item_name(i)}: {a} → {b}{note}"))
+    for i, (a, b) in enumerate(zip(oi["_storage_box_list"], ni["_storage_box_list"])):
+        if a != b:
+            out.append(("Storage Box", f"{item_name(i)}: {a} → {b}"))
 
     before, after = ordered_counts(oi["_equipment_item_list"]), ordered_counts(ni["_equipment_item_list"])
     for i in sorted(set(before) | set(after)):
@@ -345,9 +364,11 @@ class Editor(tk.Tk):
         self.general_vars = {}
         self.char_vars = {}
         self.gear_vars = {}
-        self.items = {}   # consumable id -> [qty, category]
+        self.items = {}     # consumable id -> number carried
+        self.storage = []   # per-ID counts in the Storage Box
         self.equipment = []
 
+        self._style()
         self._build_top()
         self._build_tabs()
         start = folder or self.settings.get("save_folder")
@@ -355,6 +376,16 @@ class Editor(tk.Tk):
         self.set_folder(start or autodetect())
 
     # ---------- layout ----------
+    def _style(self):
+        style = ttk.Style(self)
+        font = "Segoe UI" if sys.platform == "win32" else "TkDefaultFont"
+        style.configure("TNotebook", tabmargins=(6, 8, 6, 0))
+        style.configure("TNotebook.Tab", padding=(20, 8), font=(font, 11))
+        style.map("TNotebook.Tab",
+                  font=[("selected", (font, 11, "bold"))],
+                  foreground=[("selected", "#0b5cad"), ("active", "#0b5cad")],
+                  expand=[("selected", (2, 4, 2, 0))])
+
     def _build_top(self):
         top = ttk.Frame(self, padding=8)
         top.pack(fill="x")
@@ -372,7 +403,7 @@ class Editor(tk.Tk):
         btns = ttk.Frame(top)
         btns.grid(row=1, column=2, pady=(6, 0), sticky="ew")
         ttk.Button(btns, text="Reload", command=self.load_slot).pack(side="left")
-        ttk.Button(btns, text="Save changes", command=self.save).pack(side="left", padx=(4, 0))
+        self.primary_button(btns, "Save changes", self.save).pack(side="left", padx=(4, 0))
 
         bk = ttk.LabelFrame(top, text="Backups", padding=6)
         bk.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(8, 0))
@@ -388,7 +419,7 @@ class Editor(tk.Tk):
             side="bottom", fill="x", pady=4)
 
     def _build_tabs(self):
-        nb = ttk.Notebook(self)
+        nb = self.nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=8, pady=4)
 
         # General
@@ -427,7 +458,7 @@ class Editor(tk.Tk):
         for r, slot in enumerate((WEAPON, ARMOR, ACCESSORY)):
             ttk.Label(eqf, text=SLOT_LABELS[slot]).grid(row=r * 2, column=0, sticky="w")
             v = tk.StringVar()
-            box = ttk.Combobox(eqf, textvariable=v, state="readonly", width=46)
+            box = ttk.Combobox(eqf, textvariable=v, state="readonly", width=60)
             box.grid(row=r * 2 + 1, column=0, sticky="w", pady=(0, 8))
             box.bind("<<ComboboxSelected>>", lambda e: self.update_totals())
             self.gear_vars[slot] = v
@@ -444,27 +475,28 @@ class Editor(tk.Tk):
         # Items
         it = ttk.Frame(nb, padding=12)
         nb.add(it, text="Items")
-        self.tree = self._make_tree(it, (("id", "ID", 50), ("name", "Item", 200),
-                                         ("qty", "Quantity", 80), ("cat", "Type", 200)))
+        self.tree = self._make_tree(it, (("id", "ID", 50), ("name", "Item", 200), ("menu", "Menu", 160),
+                                         ("qty", "Carried", 80), ("box", "Storage Box", 90)))
         self.tree.bind("<<TreeviewSelect>>", self.on_item_select)
         ttk.Label(it, text="Item").grid(row=1, column=0, sticky="w", pady=(10, 0))
-        ttk.Label(it, text="Quantity").grid(row=1, column=1, sticky="w", pady=(10, 0))
-        ttk.Label(it, text="Type").grid(row=1, column=2, sticky="w", pady=(10, 0))
+        ttk.Label(it, text=f"Carried (0–{CARRY_MAX})").grid(row=1, column=1, sticky="w", pady=(10, 0))
+        ttk.Label(it, text=f"Storage Box (0–{STORAGE_MAX})").grid(row=1, column=2, sticky="w", pady=(10, 0))
         self.item_pick = tk.StringVar()
         self.item_qty = tk.StringVar()
-        self.item_cat = tk.StringVar(value=CAT_HEAL)
+        self.item_box = tk.StringVar()
         pick = ttk.Combobox(it, textvariable=self.item_pick, state="readonly", width=28,
                             values=[item_label(i) for i in CONSUMABLE_RANGE])
         pick.grid(row=2, column=0, sticky="w")
         pick.bind("<<ComboboxSelected>>", self.on_pick)
-        ttk.Spinbox(it, from_=0, to=ITEM_MAX_STACK, textvariable=self.item_qty, width=8).grid(row=2, column=1, sticky="w", padx=4)
-        ttk.Combobox(it, textvariable=self.item_cat, values=CATEGORIES, state="readonly", width=24).grid(row=2, column=2, sticky="w")
-        ttk.Button(it, text="Set / Add", command=self.set_item).grid(row=2, column=3, padx=4)
-        ttk.Button(it, text="Max all to 99", command=self.max_items).grid(row=2, column=4)
+        ttk.Spinbox(it, from_=0, to=CARRY_MAX, textvariable=self.item_qty, width=8).grid(row=2, column=1, sticky="w", padx=4)
+        ttk.Spinbox(it, from_=0, to=STORAGE_MAX, textvariable=self.item_box, width=8).grid(row=2, column=2, sticky="w", padx=4)
+        ttk.Button(it, text="Set", command=self.set_item).grid(row=2, column=3, padx=4)
+        ttk.Button(it, text=f"Max carried ({CARRY_MAX})", command=self.max_items).grid(row=2, column=4)
         ttk.Label(it, foreground="#555", wraplength=820, text=(
-            "Pick a row (or choose an item from the list) and set its quantity. 0 removes it. "
-            "For new items the type is filled in automatically. It decides which menu the item "
-            "appears in.")).grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
+            f"Pick a row (or choose any item from the list), set how many you carry and how many "
+            f"are in the Storage Box at Mario's Pad, then click Set. You can carry up to "
+            f"{CARRY_MAX} of each item. Anything over that belongs in the Storage Box.")).grid(
+            row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
 
         # Equipment bag & key items
         eq = ttk.Frame(nb, padding=12)
@@ -587,13 +619,8 @@ class Editor(tk.Tk):
             self.show_char()
 
         im = d["_item_manager"]
-        heal = ordered_counts(im["_normal_menu_heal_item_list"])
-        battle_menu = set(ordered_counts(im["_battle_menu_item_list"]))
-        self.items = {}
-        for i, q in heal.items():
-            self.items[i] = [q, CAT_HEAL if i in battle_menu else CAT_FIELD]
-        for i, q in ordered_counts(im["_normal_menu_battle_item_list"]).items():
-            self.items[i] = [q, CAT_BATTLE]
+        self.items = ordered_counts(im["_item_list"])
+        self.storage = list(im["_storage_box_list"])
         self.equipment = [i for i in im["_equipment_item_list"] if i]
         self.refresh_items()
         self.refresh_equipment()
@@ -671,27 +698,28 @@ class Editor(tk.Tk):
         return out
 
     # ---------- items ----------
+    def stored(self, i):
+        return self.storage[i] if 0 <= i < len(self.storage) else 0
+
     def refresh_items(self):
         self.tree.delete(*self.tree.get_children())
-        for i, (q, cat) in self.items.items():
-            self.tree.insert("", "end", iid=str(i), values=(i, item_name(i), q, cat))
+        owned = set(self.items) | {i for i in CONSUMABLE_RANGE if self.stored(i)}
+        for i in sorted(owned):
+            self.tree.insert("", "end", iid=str(i),
+                             values=(i, item_name(i), menu_label(i), self.items.get(i, 0), self.stored(i)))
 
     def on_item_select(self, _):
         sel = self.tree.selection()
         if sel:
-            i = int(sel[0])
-            self.item_pick.set(item_label(i))
-            self.item_qty.set(str(self.items[i][0]))
-            self.item_cat.set(self.items[i][1])
+            self.show_item(int(sel[0]))
 
     def on_pick(self, _):
-        i = int(self.item_pick.get().split()[0])
-        if i in self.items:
-            self.item_qty.set(str(self.items[i][0]))
-            self.item_cat.set(self.items[i][1])
-        else:
-            self.item_qty.set("1")
-            self.item_cat.set(default_category(i))
+        self.show_item(int(self.item_pick.get().split()[0]))
+
+    def show_item(self, i):
+        self.item_pick.set(item_label(i))
+        self.item_qty.set(str(self.items.get(i, 0)))
+        self.item_box.set(str(self.stored(i)))
 
     def set_item(self):
         if not self.item_pick.get():
@@ -699,22 +727,26 @@ class Editor(tk.Tk):
             return
         i = int(self.item_pick.get().split()[0])
         try:
-            q = max(0, min(ITEM_MAX_STACK, int(self.item_qty.get())))
+            q = max(0, min(CARRY_MAX, int(self.item_qty.get())))
+            s = max(0, min(STORAGE_MAX, int(self.item_box.get())))
         except ValueError:
-            messagebox.showerror("Invalid", "Quantity must be a number.")
+            messagebox.showerror("Invalid", "Quantities must be numbers.")
             return
-        if q == 0:
-            self.items.pop(i, None)
+        if q:
+            self.items[i] = q
         else:
-            self.items[i] = [q, self.item_cat.get()]
+            self.items.pop(i, None)
+        if i < len(self.storage):
+            self.storage[i] = s
         self.refresh_items()
         if str(i) in self.tree.get_children():
             self.tree.selection_set(str(i))
             self.tree.see(str(i))
+        self.show_item(i)
 
     def max_items(self):
-        for v in self.items.values():
-            v[0] = ITEM_MAX_STACK
+        for i in self.items:
+            self.items[i] = CARRY_MAX
         self.refresh_items()
 
     # ---------- equipment bag ----------
@@ -799,9 +831,11 @@ class Editor(tk.Tk):
 
         im = d["_item_manager"]
         size = len(im["_item_list"])
-        expand = lambda cats: [i for i, (q, c) in self.items.items() if c in cats for _ in range(q)]
-        heal = expand((CAT_HEAL, CAT_FIELD))
-        battle = expand((CAT_BATTLE,))
+        # The game's menu order: Flower Tab/Jar/Box, other Recovery items, then Battle items.
+        order = sorted(self.items, key=lambda i: (i not in FIELD_ONLY, not is_recovery(i), i))
+        expand = lambda keep: [i for i in order if keep(i) for _ in range(self.items[i])]
+        heal = expand(is_recovery)
+        battle = expand(lambda i: not is_recovery(i))
         if len(heal) + len(battle) > size:
             raise ValueError(f"Too many items in total (limit {size}).")
         if len(self.equipment) > len(im["_equipment_item_list"]):
@@ -809,7 +843,8 @@ class Editor(tk.Tk):
         im["_item_list"] = pad(heal + battle, size)
         im["_normal_menu_heal_item_list"] = pad(heal, size)
         im["_normal_menu_battle_item_list"] = pad(battle, size)
-        im["_battle_menu_item_list"] = pad(expand((CAT_HEAL,)) + battle, size)
+        im["_battle_menu_item_list"] = pad(expand(lambda i: i not in FIELD_ONLY), size)
+        im["_storage_box_list"] = list(self.storage)
         im["_equipment_item_list"] = pad(self.equipment, len(im["_equipment_item_list"]))
         # Per-ID totals of everything owned (bag + equipment + key items).
         totals = [0] * len(im["_all_item_list"])
@@ -838,20 +873,95 @@ class Editor(tk.Tk):
             return
         if not self.confirm_changes(changes, targets):
             return
+        # Warn only when the save has no up-to-date backup: none exists, or the game has
+        # written to the save since the newest one. If the files on disk are exactly what
+        # this editor last saved, back them up quietly so each edit can still be undone.
+        dest = self.current_backup()
+        choice = None
+        if dest:
+            backup_note = f"Your up-to-date backup is:\n{dest}"
+        elif self.unchanged_since_last_save():
+            choice = "backup"
+        else:
+            choice = self.backup_warning()
+            if choice is None:
+                return
+            backup_note = "No backup was made."
         try:
-            dest = self.make_backup("before edit")
+            if not dest and choice == "backup":
+                dest = os.path.basename(self.make_backup("before edit"))
+                backup_note = f"The old files were backed up as:\n{dest}"
             for c in self.copies():
                 for t in targets:
                     dump_save(self.data, os.path.join(c, t))
         except Exception as e:
             messagebox.showerror("Save failed", str(e))
             return
-        self.status.set(f"Saved {', '.join(targets)}. Backup: {os.path.basename(dest)}")
+        self.settings.setdefault("last_saved", {})[self.root_dir.get()] = self.fingerprint()
+        store_settings(self.settings)
+        self.status.set(f"Saved {', '.join(targets)}." + (f" Backup: {dest}" if dest else " No backup made."))
         idx = self.slot_box.current()
         self.refresh_slots()
         self.slot_box.current(idx)
         self.load_slot()
-        messagebox.showinfo("Saved", f"Saved!\n\nThe old files were backed up as:\n{os.path.basename(dest)}")
+        messagebox.showinfo("Saved", f"Saved!\n\n{backup_note}")
+
+    def backup_warning(self):
+        """Warn that there's no up-to-date backup. Returns "backup", "skip" or None (cancel)."""
+        newest = self.list_backups()[:1]
+        if newest:
+            when = backup_time(newest[0])
+            stamp = f"{when:%B} {when.day}, {when.year} at {when.hour % 12 or 12}:{when:%M %p}"
+            reason = (f"Your newest backup is from {stamp} "
+                      f"({age_text(datetime.now() - when)} ago), and your save has changed since then. "
+                      "You've played or edited it.") if when else (
+                      "Your newest backup doesn't match your current save. It has changed since then.")
+        else:
+            reason = "You don't have any backups of this save yet."
+        win = tk.Toplevel(self)
+        win.title("Back up first?")
+        win.resizable(False, False)
+        win.transient(self)
+        win.grab_set()
+        body = ttk.Frame(win, padding=16)
+        body.pack(fill="both")
+        ttk.Label(body, text="⚠  Your save isn't backed up", font=("Segoe UI", 12, "bold"),
+                  foreground="#b26a00").pack(anchor="w")
+        ttk.Label(body, text=reason + "\n\nMake a backup now so you can undo this edit if "
+                  "something goes wrong?", wraplength=440, justify="left").pack(anchor="w", pady=(8, 0))
+        result = {"choice": None}
+
+        def pick(choice):
+            result["choice"] = choice
+            win.destroy()
+
+        row = ttk.Frame(win, padding=(16, 0, 16, 16))
+        row.pack(fill="x")
+        ttk.Button(row, text="Cancel", command=win.destroy).pack(side="right")
+        ttk.Button(row, text="Save without a backup", command=lambda: pick("skip")).pack(side="right", padx=6)
+        self.primary_button(row, "Back up and save", lambda: pick("backup")).pack(side="right")
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.bind("<Return>", lambda e: pick("backup"))
+        self.center(win)
+        self.wait_window(win)
+        return result["choice"]
+
+    def center(self, win):
+        """Place a pop-up window in the middle of the editor window."""
+        win.update_idletasks()
+        w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+        if win.winfo_width() > 1:
+            w, h = max(w, win.winfo_width()), max(h, win.winfo_height())
+        x = self.winfo_rootx() + (self.winfo_width() - w) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - h) // 3
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def primary_button(self, parent, text, command):
+        """A green button for the main 'save' action."""
+        return tk.Button(parent, text=text, command=command, bg="#2e7d32", fg="white",
+                         activebackground="#1b5e20", activeforeground="white", relief="flat",
+                         font=("Segoe UI", 10, "bold"), padx=14, pady=3, cursor="hand2",
+                         borderwidth=0, highlightthickness=0)
 
     def confirm_changes(self, changes, targets):
         """Modal listing every change; returns True if the user chooses to save."""
@@ -863,7 +973,7 @@ class Editor(tk.Tk):
         where = " (both copies)" if len(self.copies()) > 1 else ""
         ttk.Label(win, padding=(10, 10, 10, 4), wraplength=590, justify="left", text=(
             f"{len(changes)} change{'s' if len(changes) != 1 else ''} will be written to "
-            f"{' and '.join(targets)}{where}. A backup of the current files is made first.\n"
+            f"{' and '.join(targets)}{where}.\n"
             "Make sure the game/emulator is closed.")).pack(anchor="w")
         frame = ttk.Frame(win, padding=(10, 0))
         frame.pack(fill="both", expand=True)
@@ -889,8 +999,9 @@ class Editor(tk.Tk):
         row = ttk.Frame(win, padding=10)
         row.pack(fill="x")
         ttk.Button(row, text="Cancel", command=win.destroy).pack(side="right")
-        ttk.Button(row, text="Save these changes", command=ok).pack(side="right", padx=6)
+        self.primary_button(row, "Save these changes", ok).pack(side="right", padx=6)
         win.bind("<Escape>", lambda e: win.destroy())
+        self.center(win)
         self.wait_window(win)
         return result["ok"]
 
@@ -924,6 +1035,47 @@ class Editor(tk.Tk):
             f.write(self.root_dir.get() + "\n")
         self.update_backup_count()
         return dest
+
+    def fingerprint(self):
+        """SHA-256 of every save file in this folder, keyed by copy/file name."""
+        out = {}
+        for c in self.copies():
+            for f in sorted(os.listdir(c)):
+                if f.startswith(SLOT_PREFIX):
+                    with open(os.path.join(c, f), "rb") as fh:
+                        out[f"{self.backup_name(c)}/{f}"] = hashlib.sha256(fh.read()).hexdigest()
+        return out
+
+    def unchanged_since_last_save(self):
+        """True if the save on disk is exactly what this editor last wrote (the game hasn't
+        saved over it since)."""
+        last = self.settings.get("last_saved", {}).get(self.root_dir.get())
+        return bool(last) and last == self.fingerprint() and bool(self.list_backups())
+
+    def current_backup(self):
+        """Name of the newest backup identical to the save on disk now, or None."""
+        copies = self.copies()
+        current = {}
+        for c in copies:
+            for f in os.listdir(c):
+                if f.startswith(SLOT_PREFIX):
+                    with open(os.path.join(c, f), "rb") as fh:
+                        current[(self.backup_name(c), f)] = fh.read()
+        if not current:
+            return None
+        for name in self.list_backups():
+            base = os.path.join(BACKUP_DIR, name)
+            try:
+                saved = {(sub, f) for sub in {k[0] for k in current}
+                         for f in os.listdir(os.path.join(base, sub)) if f.startswith(SLOT_PREFIX)}
+                if saved != set(current):
+                    continue
+                if all(open(os.path.join(base, sub, f), "rb").read() == data
+                       for (sub, f), data in current.items()):
+                    return name
+            except OSError:
+                continue
+        return None
 
     def list_backups(self):
         if not os.path.isdir(BACKUP_DIR):
@@ -1024,6 +1176,7 @@ class Editor(tk.Tk):
         ttk.Button(row, text="Restore selected", command=do_restore).pack(side="left")
         ttk.Button(row, text="Delete selected", command=do_delete).pack(side="left", padx=4)
         ttk.Button(row, text="Close", command=win.destroy).pack(side="right")
+        self.center(win)
 
 
 if __name__ == "__main__":
