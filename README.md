@@ -56,7 +56,7 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 | | |
 |---|---|
-| 🪟 **Windows** | Download **`Super-Mario-RPG-Save-Editor.exe`** from the [**latest release**](../../releases/latest) and double-click it. No install needed. |
+| 🪟 **Windows** | Download **`Super-Mario-RPG-Switch-Save-Editor.exe`** from the [**latest release**](../../releases/latest) and double-click it. No install needed. |
 | 🐍 **Any OS (from source)** | Install [Python 3.8+](https://www.python.org/downloads/) and run `python smr_save_editor.py`. On Windows you can also double-click `Open Save Editor.bat`. On Linux, also install `python3-tk`. |
 
 > [!NOTE]
