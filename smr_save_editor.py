@@ -501,17 +501,37 @@ class Editor(tk.Tk):
         # Equipment bag & key items
         eq = ttk.Frame(nb, padding=12)
         nb.add(eq, text="Equipment Bag & Key Items")
-        self.eq_tree = self._make_tree(eq, (("id", "ID", 50), ("name", "Item", 220), ("kind", "Kind", 220)))
-        ttk.Label(eq, text="Add equipment:").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self.eq_tree = self._make_tree(eq, (("id", "ID", 45), ("name", "Item", 170), ("type", "Type", 90),
+                                            ("who", "Who can equip", 200), ("worn", "Equipped by", 120)))
+        self.eq_tree.bind("<<TreeviewSelect>>", self.on_equipment_select)
+        self.eq_tree.tag_configure("worn", foreground="#0b5cad")
+        self.eq_tree.tag_configure("key", foreground="#777")
+        self._eq_rows = {}
+
+        sel = ttk.LabelFrame(eq, text="Selected item", padding=8)
+        sel.grid(row=1, column=0, columnspan=6, sticky="ew", pady=(10, 0))
+        self.eq_selected = tk.StringVar(value="Pick a row above.")
+        ttk.Label(sel, textvariable=self.eq_selected, width=34).grid(row=0, column=0, sticky="w")
+        ttk.Label(sel, text="Equip on:").grid(row=0, column=1, sticky="e", padx=(8, 4))
+        self.equip_on = tk.StringVar()
+        self.equip_on_box = ttk.Combobox(sel, textvariable=self.equip_on, state="readonly", width=24)
+        self.equip_on_box.grid(row=0, column=2, sticky="w")
+        ttk.Button(sel, text="Equip", command=self.equip_selected).grid(row=0, column=3, padx=4)
+        ttk.Button(sel, text="Unequip", command=self.unequip_selected).grid(row=0, column=4)
+        ttk.Button(sel, text="Remove from bag", command=self.remove_equipment).grid(row=0, column=5, padx=(12, 0))
+
+        add = ttk.Frame(eq)
+        add.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        ttk.Label(add, text="Add equipment to bag:").pack(side="left")
         self.eq_pick = tk.StringVar()
-        ttk.Combobox(eq, textvariable=self.eq_pick, state="readonly", width=46,
-                     values=[gear_label(i) for i in EQUIP_IDS]).grid(row=2, column=0, sticky="w")
-        ttk.Button(eq, text="Add", command=self.add_equipment).grid(row=2, column=1, padx=4, sticky="w")
-        ttk.Button(eq, text="Remove selected", command=self.remove_equipment).grid(row=2, column=2, sticky="w")
+        ttk.Combobox(add, textvariable=self.eq_pick, state="readonly", width=60,
+                     values=[gear_label(i) for i in EQUIP_IDS]).pack(side="left", padx=6)
+        ttk.Button(add, text="Add", command=self.add_equipment).pack(side="left")
         ttk.Label(eq, foreground="#555", wraplength=820, text=(
-            "Equipment added here goes into your bag. To wear it, use the Characters tab or equip "
-            "it in-game. Equipped items can't be removed. Key items are view-only, because "
-            "changing them can break story progress.")).grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
+            "Pick a row to equip it on a character, unequip it, or remove a spare copy from the "
+            "bag. Equipping here also updates the Characters tab. Key items are view-only, "
+            "because changing them can break story progress.")).grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
+        nb.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
     def _make_tree(self, parent, cols):
         tree = ttk.Treeview(parent, columns=[c[0] for c in cols], show="headings", height=12)
@@ -754,35 +774,135 @@ class Editor(tk.Tk):
         return p.get("_id") in self.data.get("_party_order", [])
 
     def worn_gear(self):
-        """(character, item) pairs that must be in the bag: gear worn by party members, plus
-        gear changed in this editor. Characters who haven't joined yet have starting gear
-        that the bag doesn't contain."""
+        """(character index, item) pairs that must be in the bag: gear worn by party members,
+        plus gear changed in this editor. Characters who haven't joined yet have starting
+        gear that the bag doesn't contain."""
         pairs = []
-        for p, orig in zip(self.chars, self.orig_chars):
+        for n, (p, orig) in enumerate(zip(self.chars, self.orig_chars)):
             for slot in (WEAPON, ARMOR, ACCESSORY):
                 i = p.get(slot, 0)
                 if i and (self.joined(p) or i != orig.get(slot, 0)):
-                    pairs.append((p["_name"], i))
+                    pairs.append((n, i))
         return pairs
 
     def equipped_ids(self):
         return [i for _, i in self.worn_gear()]
 
-    def refresh_equipment(self):
+    def char_label(self, n):
+        p = self.chars[n]
+        return p["_name"] + ("" if self.joined(p) else " (not joined yet)")
+
+    def can_wear(self, i):
+        """Indexes of characters who can equip item i."""
+        allowed = GEAR.get(i, (None, ()))[1]
+        return [n for n, p in enumerate(self.chars) if p.get("_name") and p.get("_id", n) in allowed]
+
+    def on_tab_changed(self, _):
+        if self.data and self.nb.index("current") == 3:
+            self.store_char()          # pick up gear changed on the Characters tab
+            self.refresh_equipment()
+
+    def refresh_equipment(self, select=None):
         self.eq_tree.delete(*self.eq_tree.get_children())
+        self._eq_rows = {}
         wearers = {}
-        for name, i in self.worn_gear():
-            wearers.setdefault(i, []).append(name)
+        for n, i in self.worn_gear():
+            wearers.setdefault(i, []).append(n)
         shown = {}
-        for n, i in enumerate(self.equipment):
-            kind = SLOT_LABELS.get(GEAR.get(i, (None,))[0], "Equipment")
+        names = {1: "Mario", 2: "Mallow", 3: "Geno", 4: "Bowser", 5: "Peach"}
+        for row, i in enumerate(self.equipment):
+            slot, allowed, _ = GEAR.get(i, (None, (), None))
+            who = "Everyone" if len(allowed) == 5 else ", ".join(names[c] for c in allowed) or "?"
             k = shown.get(i, 0)
-            if k < len(wearers.get(i, [])):
-                kind += f" (worn by {wearers[i][k]})"
+            wearer = wearers[i][k] if k < len(wearers.get(i, [])) else None
             shown[i] = k + 1
-            self.eq_tree.insert("", "end", iid=f"e{n}", values=(i, item_name(i), kind))
-        for n, i in enumerate(x for x in self.data["_item_manager"]["_important_item_list"] if x):
-            self.eq_tree.insert("", "end", iid=f"k{n}", values=(i, item_name(i), "Key item"))
+            iid = f"e{row}"
+            self._eq_rows[iid] = (i, wearer)
+            self.eq_tree.insert("", "end", iid=iid, tags=("worn",) if wearer is not None else (),
+                                values=(i, item_name(i), SLOT_LABELS.get(slot, "Equipment"), who,
+                                        self.chars[wearer]["_name"] if wearer is not None else "—"))
+        for row, i in enumerate(x for x in self.data["_item_manager"]["_important_item_list"] if x):
+            self.eq_tree.insert("", "end", iid=f"k{row}", tags=("key",),
+                                values=(i, item_name(i), "Key item", "—", "—"))
+        if select and select in self._eq_rows:
+            self.eq_tree.selection_set(select)
+            self.eq_tree.see(select)
+        else:
+            self.eq_selected.set("Pick a row above.")
+            self.equip_on_box["values"] = []
+            self.equip_on.set("")
+
+    def selected_gear(self):
+        sel = self.eq_tree.selection()
+        if not sel or sel[0] not in self._eq_rows:
+            return None, None, None
+        i, wearer = self._eq_rows[sel[0]]
+        return sel[0], i, wearer
+
+    def on_equipment_select(self, _):
+        iid, i, wearer = self.selected_gear()
+        if iid is None:
+            self.eq_selected.set("Key items can't be equipped.")
+            self.equip_on_box["values"] = []
+            self.equip_on.set("")
+            return
+        state = f"worn by {self.chars[wearer]['_name']}" if wearer is not None else "not equipped"
+        self.eq_selected.set(f"{item_name(i)}  ({state})")
+        slot = GEAR[i][0]
+        options = [f"{n}: {self.char_label(n)}" for n in self.can_wear(i)
+                   if self.chars[n].get(slot) != i]
+        self.equip_on_box["values"] = options
+        self.equip_on.set(options[0] if options else "")
+
+    def set_gear(self, n, slot, item):
+        """Change one character's gear, keeping the bag and the Characters tab in sync."""
+        p, orig = self.chars[n], self.orig_chars[n]
+        old = p.get(slot, 0)
+        # Starting gear of a character who hasn't joined isn't in the bag; keep it when removed.
+        if old and not self.joined(p) and old == orig.get(slot, 0):
+            self.equipment.append(old)
+        p[slot] = item
+        if n == self._char_index:
+            self.gear_vars[slot].set(gear_label(item))
+            self.update_totals()
+
+    def equip_selected(self):
+        self.store_char()
+        iid, i, wearer = self.selected_gear()
+        if iid is None or not self.equip_on.get():
+            messagebox.showinfo("Equip", "Pick an item and a character to equip it on.")
+            return
+        n = int(self.equip_on.get().split(":")[0])
+        slot = GEAR[i][0]
+        if self.chars[n].get(slot) == i:
+            messagebox.showinfo("Equip", f"{self.chars[n]['_name']} is already wearing {item_name(i)}.")
+            return
+        spare = self.equipment.count(i) - self.equipped_ids().count(i)
+        if spare <= 0:
+            if wearer is None:
+                return
+            if not messagebox.askyesno("Take it from someone?", f"{self.chars[wearer]['_name']} is "
+                                       f"wearing your only {item_name(i)}. Move it to "
+                                       f"{self.chars[n]['_name']}?"):
+                return
+            self.set_gear(wearer, slot, 0)
+        self.set_gear(n, slot, i)
+        self.refresh_equipment(select=self.row_worn_by(i, n))
+        self.status.set(f"{self.chars[n]['_name']} now has {item_name(i)} equipped (not saved yet).")
+
+    def unequip_selected(self):
+        self.store_char()
+        iid, i, wearer = self.selected_gear()
+        if iid is None or wearer is None:
+            messagebox.showinfo("Unequip", "Pick an item that someone is wearing.")
+            return
+        name = self.chars[wearer]["_name"]
+        self.set_gear(wearer, GEAR[i][0], 0)
+        self.refresh_equipment(select=iid)
+        self.status.set(f"Unequipped {item_name(i)} from {name} (not saved yet).")
+
+    def row_worn_by(self, i, n):
+        return next((iid for iid, (item, w) in self._eq_rows.items() if item == i and w == n), None)
 
     def add_equipment(self):
         if not self.eq_pick.get():
@@ -801,8 +921,7 @@ class Editor(tk.Tk):
         n = int(sel[0][1:])
         i = self.equipment[n]
         if self.equipment.count(i) <= self.equipped_ids().count(i):
-            messagebox.showerror("Equipped", f"{item_name(i)} is being worn. Unequip it on the "
-                                 "Characters tab first.")
+            messagebox.showerror("Equipped", f"{item_name(i)} is being worn. Unequip it first.")
             return
         del self.equipment[n]
         self.refresh_equipment()
