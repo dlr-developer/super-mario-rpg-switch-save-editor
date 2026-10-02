@@ -26,7 +26,7 @@ Works with saves from a real Switch and from every major Switch emulator.
 | 🧑‍🤝‍🧑 **Characters** | Level, EXP, HP and all five stats for Mario, Mallow, Geno, Bowser and Peach |
 | 🔨 **Equipment** | Change each character's weapon, armor and accessory. Only gear they can wear is listed, with its stat bonuses |
 | 🎒 **Items & Storage Box** | Every consumable by name. Set how many you carry (up to 30) and how many are in the Storage Box at Mario's Pad |
-| 🗝️ **Equipment bag & key items** | See everything you own, and add or remove spare gear |
+| 🗝️ **Equipment bag & key items** | See every piece of gear, who can equip it and who's wearing it. Equip, unequip, add or remove gear right from the list |
 | 🔍 **Review before saving** | A window lists every change, like *"Mario Weapon: Hammer → Super Hammer"*, before anything is written |
 | 🛟 **Backups** | Warns you before saving if your save isn't backed up, plus unlimited manual backups with notes and one-click restore |
 | 🔒 **Safe by design** | Anything you don't edit is written back byte-for-byte as the game wrote it |
@@ -39,6 +39,10 @@ Works with saves from a real Switch and from every major Switch emulator.
 **Items & Storage Box**
 
 <img src="docs/screenshot-items.png" alt="Items tab" width="760">
+
+**Equipment Bag & Key Items**
+
+<img src="docs/screenshot-equipment.png" alt="Equipment Bag tab" width="760">
 
 **General**
 
