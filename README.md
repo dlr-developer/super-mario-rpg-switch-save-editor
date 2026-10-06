@@ -238,6 +238,8 @@ Cheats change the game **while it's running** (things like infinite HP or EXP mu
 > [!IMPORTANT]
 > Cheat codes only work for the **exact game version** they were written for. The editor reads your game's **build ID** from Ryujinx's log (v1.0.0 is `E968832CADE2AD7C`). You can also type it in: Ryujinx shows it at the top of **Manage Cheats**.
 
+Your cheats are filed in the **[`cheats`](cheats/README.md)** folder by game version, with a description and a **Tested on** result (Ryujinx / yuzu family / Switch) for each one, ready to share.
+
 The editor only manages its own cheat file, so it never touches cheats you installed another way. Your cheat list is kept by the app, so removing cheats from the emulator doesn't lose them.
 
 ---

@@ -24,6 +24,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 APP_NAME = "Super Mario RPG Switch Save Editor"
 APP_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 BACKUP_DIR = os.path.join(APP_DIR, "backups")
+CHEAT_LIB_DIR = os.path.join(APP_DIR, "cheats")   # cheats/<game>/<version - build ID>/, shareable
 RESOURCE_DIR = getattr(sys, "_MEIPASS", APP_DIR)     # bundled files live here inside the .exe
 SETTINGS_PATH = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.config"),
                              APP_NAME, "settings.json")
@@ -445,6 +446,87 @@ def format_cheats(cheats):
     return "\n".join(out)
 
 
+# ---------- cheat library: cheats/<game>/<version - build ID>/ ----------
+GAME_FOLDER = f"{TITLE_ID} - Super Mario RPG"
+TEST_TARGETS = ("Ryujinx", "yuzu family", "Switch")
+TEST_STATES = ("Untested", "Works", "Doesn't work")
+TEST_ICONS = {"Untested": "❔", "Works": "✅", "Doesn't work": "❌"}
+
+
+def library_builds():
+    """{build ID: folder} for every game version that has a cheat folder."""
+    root = os.path.join(CHEAT_LIB_DIR, GAME_FOLDER)
+    found = {}
+    if os.path.isdir(root):
+        for name in sorted(os.listdir(root)):
+            m = re.search(r"([0-9A-Fa-f]{16})$", name)
+            if m and os.path.isdir(os.path.join(root, name)):
+                found[m.group(1).upper()] = os.path.join(root, name)
+    return found
+
+
+def build_folder(bid):
+    return library_builds().get(bid) or os.path.join(
+        CHEAT_LIB_DIR, GAME_FOLDER, f"{KNOWN_BUILDS.get(bid, 'unknown version')} - {bid}")
+
+
+def read_library(bid):
+    """Cheats filed for one build: the Atmosphère file plus the details in info.json."""
+    folder = library_builds().get(bid)
+    if not folder:
+        return []
+    try:
+        cheats = parse_cheats(open(os.path.join(folder, bid + ".txt"), encoding="utf-8-sig").read())
+    except (OSError, ValueError):
+        return []
+    try:
+        info = json.load(open(os.path.join(folder, "info.json"), encoding="utf-8"))
+        details = {c["name"]: c for c in info.get("cheats", [])}
+    except (OSError, ValueError, KeyError):
+        details = {}
+    for c in cheats:
+        d = details.get(c["name"], {})
+        c["description"] = d.get("description", "")
+        c["author"] = d.get("author", "")
+        c["tested"] = {t: d.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}
+    return cheats
+
+
+def write_library(bid, cheats):
+    """Write a build's folder: <build ID>.txt (ready for any emulator), info.json, README.md."""
+    folder = build_folder(bid)
+    if not cheats:
+        for f in (bid + ".txt", "info.json", "README.md"):
+            if os.path.exists(os.path.join(folder, f)):
+                os.remove(os.path.join(folder, f))
+        if os.path.isdir(folder) and not os.listdir(folder):
+            os.rmdir(folder)
+        return
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, bid + ".txt"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(format_cheats(cheats))
+    version = KNOWN_BUILDS.get(bid, "unknown version")
+    info = {"game": "Super Mario RPG", "title_id": TITLE_ID, "version": version, "build_id": bid,
+            "cheats": [{"name": c["name"], "description": c.get("description", ""), "author": c.get("author", ""),
+                        "master": bool(c.get("master")),
+                        "tested": {t: c.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}}
+                       for c in cheats]}
+    with open(os.path.join(folder, "info.json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(info, f, indent=2, ensure_ascii=False)
+    rows = ["| Cheat | What it does | " + " | ".join(TEST_TARGETS) + " | Author |",
+            "|---|---|" + "---|" * len(TEST_TARGETS) + "---|"]
+    for c in cheats:
+        name = c["name"] + (" *(master code)*" if c.get("master") else "")
+        tested = " | ".join(TEST_ICONS[c.get("tested", {}).get(t, "Untested")] for t in TEST_TARGETS)
+        rows.append(f"| {name} | {c.get('description', '') or '—'} | {tested} | {c.get('author', '') or '—'} |")
+    with open(os.path.join(folder, "README.md"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(f"# Super Mario RPG {version} cheats\n\nBuild ID `{bid}` · title ID `{TITLE_ID}`\n\n"
+                + "\n".join(rows) + "\n\n✅ works · ❌ doesn't work · ❔ untested\n\n"
+                "Install with the editor's **Cheats** tab (**Import cheat file…** and pick "
+                f"`{bid}.txt`), or copy `{bid}.txt` into your emulator's cheat folder. "
+                "See the [cheat guide](../../../docs/CHEATS.md).\n")
+
+
 def emulator_for(save_folder):
     """Work out which emulator a save folder belongs to, and where its cheats go.
 
@@ -836,8 +918,8 @@ class Editor(tk.Tk):
         ttk.Label(top, textvariable=self.build_note, style="Muted.TLabel").grid(row=1, column=2, sticky="w", padx=6, pady=(6, 0))
         ttk.Button(top, text="Detect again", command=self.detect_cheat_target).grid(row=1, column=3, padx=4, pady=(6, 0))
 
-        self.cheat_tree = self._make_tree(ct, (("on", "On", 50), ("name", "Cheat", 330), ("kind", "Type", 110),
-                                               ("lines", "Code lines", 90), ("installed", "In emulator", 110)),
+        self.cheat_tree = self._make_tree(ct, (("on", "On", 45), ("name", "Cheat", 260), ("kind", "Type", 95),
+                                               ("tested", "Tested on", 200), ("installed", "In emulator", 100)),
                                           row=2, height=6)
         self.cheat_tree.bind("<Double-1>", lambda e: self.toggle_cheats())
 
@@ -846,7 +928,7 @@ class Editor(tk.Tk):
         for text, cmd in (("Turn on/off", self.toggle_cheats), ("Add cheat…", self.add_cheat),
                           ("Import cheat file…", self.import_cheats), ("Edit…", self.edit_cheat),
                           ("Delete", self.delete_cheats), ("Select all", lambda: self.cheat_tree.selection_set(
-                              self.cheat_tree.get_children()))):
+                              self.cheat_tree.get_children())), ("Open cheats folder", self.open_cheat_folder)):
             ttk.Button(acts, text=text, command=cmd).pack(side="left", padx=(0, 4))
 
         inst = ttk.Frame(ct)
@@ -860,7 +942,7 @@ class Editor(tk.Tk):
             "codes in Atmosphère format ([Cheat name] followed by lines of 8-digit hex codes), turn on the "
             "ones you want, then click Install to emulator and restart the game. Codes only work for "
             "the game version they were made for, so check the build ID. Your cheat list is kept by "
-            "this app, so it's safe to remove cheats from the emulator and install them again later.")).grid(
+            "this app in its cheats folder, filed by game version, so you can share it or remove cheats from the emulator and install them again later.")).grid(
             row=5, column=0, columnspan=6, sticky="w", pady=(10, 0))
         nb.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
@@ -1627,26 +1709,38 @@ class Editor(tk.Tk):
             tree.heading(c, text=text + ((" ▼" if reverse else " ▲") if c == col else ""))
 
     # ---------- cheats ----------
-    def cheats_file(self):
-        return os.path.join(os.path.dirname(SETTINGS_PATH), "cheats.json")
-
     def load_cheat_library(self):
+        """Move cheats saved by older versions (one cheats.json in the settings folder) into the
+        per-build library folders."""
+        old = os.path.join(os.path.dirname(SETTINGS_PATH), "cheats.json")
+        if not os.path.exists(old):
+            return
         try:
-            with open(self.cheats_file(), encoding="utf-8") as f:
-                self.cheat_lib = json.load(f)
-        except (OSError, ValueError):
-            self.cheat_lib = {}
+            data = json.load(open(old, encoding="utf-8"))
+            for bid, cheats in data.items():
+                have = {c["name"]: c for c in read_library(bid)}
+                for c in cheats:
+                    have.setdefault(c["name"], dict(c, description="", author="",
+                                                    tested={t: "Untested" for t in TEST_TARGETS}))
+                write_library(bid, list(have.values()))
+                on = self.settings.setdefault("cheats_on", {}).setdefault(bid, [])
+                on.extend(c["name"] for c in cheats if c.get("on") and c["name"] not in on)
+            store_settings(self.settings)
+            os.replace(old, old + ".migrated")
+        except (OSError, ValueError, KeyError):
+            pass
 
     def store_cheat_library(self):
         bid = self.current_build()
-        if bid:
-            self.cheat_lib[bid] = self.cheats
+        if not bid:
+            return
         try:
-            os.makedirs(os.path.dirname(self.cheats_file()), exist_ok=True)
-            with open(self.cheats_file(), "w", encoding="utf-8") as f:
-                json.dump(self.cheat_lib, f, indent=2)
+            write_library(bid, self.cheats)
         except OSError as e:
-            messagebox.showerror("Couldn't save cheat list", str(e))
+            messagebox.showerror("Couldn't save cheats", str(e))
+            return
+        self.settings.setdefault("cheats_on", {})[bid] = [c["name"] for c in self.cheats if c.get("on")]
+        store_settings(self.settings)
 
     def current_build(self):
         bid = self.build_id.get().strip().upper()
@@ -1656,7 +1750,7 @@ class Editor(tk.Tk):
         self.emulator = emulator_for(self.root_dir.get())
         found = detect_build_ids(self.emulator)
         known = [b for b in found if b in KNOWN_BUILDS] + [b for b in found if b not in KNOWN_BUILDS]
-        stored = [b for b in self.cheat_lib if b not in known]
+        stored = [b for b in library_builds() if b not in known]
         self.build_box["values"] = known + stored
         if known:
             self.build_id.set(known[0])
@@ -1673,13 +1767,16 @@ class Editor(tk.Tk):
 
     def load_cheats(self):
         bid = self.current_build()
-        self.cheats = [dict(c) for c in self.cheat_lib.get(bid, [])] if bid else []
+        self.cheats = read_library(bid) if bid else []
+        on = set(self.settings.get("cheats_on", {}).get(bid, []))
+        for c in self.cheats:
+            c["on"] = c["name"] in on
         if not bid:
             self.build_note.set("Enter the 16-character build ID (Ryujinx: right-click the game → Manage Cheats).")
         elif bid in KNOWN_BUILDS:
             self.build_note.set(f"Super Mario RPG {KNOWN_BUILDS[bid]}, found in your emulator's log")
         elif bid in (self.build_box["values"] or ()):
-            self.build_note.set("Found in your emulator's log")
+            self.build_note.set("Found in your emulator's log or your cheat library")
         else:
             self.build_note.set("Entered by hand")
         self.refresh_cheats()
@@ -1698,12 +1795,22 @@ class Editor(tk.Tk):
         keep = set(self.cheat_tree.selection()) if keep is None else {str(k) for k in keep}
         self.cheat_tree.delete(*self.cheat_tree.get_children())
         installed = self.installed_names()
+        short = {"Ryujinx": "Ryujinx", "yuzu family": "yuzu", "Switch": "Switch"}
         for n, c in enumerate(self.cheats):
+            marks = {"Untested": "?", "Works": "✓", "Doesn't work": "✗"}      # plain symbols draw cleanly in Tk
+            tested = " · ".join(f"{short[t]} {marks[c.get('tested', {}).get(t, 'Untested')]}" for t in TEST_TARGETS)
             self.cheat_tree.insert("", "end", iid=str(n), tags=("on" if c.get("on") else "off",), values=(
                 "✔" if c.get("on") else "", c["name"], "Master code" if c.get("master") else "Cheat",
-                len(c["lines"]), "Installed" if c["name"] in installed else "—"))
+                tested, "Installed" if c["name"] in installed else "—"))
         self.cheat_tree.selection_set([k for k in keep if self.cheat_tree.exists(k)])
         self.apply_sort(self.cheat_tree)
+
+    def open_cheat_folder(self):
+        if self.need_build():
+            return
+        folder = build_folder(self.current_build())
+        os.makedirs(folder, exist_ok=True)
+        open_folder(folder)
 
     def selected_cheats(self):
         return sorted(int(s) for s in self.cheat_tree.selection())
@@ -1736,6 +1843,9 @@ class Editor(tk.Tk):
             new = [c for c in new if c["name"] not in names]
         for c in new:
             c.setdefault("on", False)
+            c.setdefault("description", "")
+            c.setdefault("author", "")
+            c.setdefault("tested", {t: "Untested" for t in TEST_TARGETS})
             if c["name"] in names:
                 self.cheats[names[c["name"]]] = c
             else:
@@ -1766,32 +1876,54 @@ class Editor(tk.Tk):
                                        f"but the build ID selected is {self.current_build()}. Cheats for a "
                                        "different version usually don't work. Import anyway?"):
                 return
+        # A library folder carries descriptions and test results next to the cheat file.
+        info = os.path.join(os.path.dirname(path), "info.json")
+        if os.path.exists(info):
+            try:
+                details = {c["name"]: c for c in json.load(open(info, encoding="utf-8")).get("cheats", [])}
+                for c in new:
+                    d = details.get(c["name"], {})
+                    c["description"], c["author"] = d.get("description", ""), d.get("author", "")
+                    c["tested"] = {t: d.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}
+            except (OSError, ValueError, KeyError):
+                pass
         self.add_cheats(new, os.path.basename(path))
 
     def cheat_dialog(self, cheat=None):
         """Add/edit dialog. Returns the new cheat dict, or None if cancelled."""
         win = tk.Toplevel(self)
         win.title("Edit cheat" if cheat else "Add cheat")
-        win.geometry("560x420")
+        win.geometry("600x600")
         win.transient(self)
         win.grab_set()
         body = ttk.Frame(win, padding=12)
         body.pack(fill="both", expand=True)
-        ttk.Label(body, text="Name").pack(anchor="w")
-        name = tk.StringVar(value=cheat["name"] if cheat else "")
-        ttk.Entry(body, textvariable=name, width=60).pack(anchor="w", fill="x")
-        master = tk.BooleanVar(value=bool(cheat and cheat.get("master")))
+        cheat = cheat or {}
+        fields = {}
+        for key, label in (("name", "Name"), ("description", "What it does"), ("author", "Author (optional)")):
+            ttk.Label(body, text=label).pack(anchor="w", pady=(6, 0) if key != "name" else 0)
+            fields[key] = tk.StringVar(value=cheat.get(key, ""))
+            ttk.Entry(body, textvariable=fields[key], width=70).pack(anchor="w", fill="x")
+        master = tk.BooleanVar(value=bool(cheat.get("master")))
         ttk.Checkbutton(body, text="Master code (needed by some cheats; always on)", variable=master).pack(
-            anchor="w", pady=(6, 0))
+            anchor="w", pady=(8, 0))
+        tested_box = ttk.LabelFrame(body, text="Tested on", padding=6)
+        tested_box.pack(fill="x", pady=(8, 0))
+        tested = {}
+        for col, target in enumerate(TEST_TARGETS):
+            ttk.Label(tested_box, text=target).grid(row=0, column=col * 2, sticky="w", padx=(0 if col == 0 else 14, 4))
+            tested[target] = tk.StringVar(value=cheat.get("tested", {}).get(target, "Untested"))
+            ttk.Combobox(tested_box, textvariable=tested[target], values=TEST_STATES, state="readonly",
+                         width=12).grid(row=0, column=col * 2 + 1)
         ttk.Label(body, text="Code (one instruction per line, 8-digit hex groups)").pack(anchor="w", pady=(8, 0))
-        code = tk.Text(body, height=12, font=("Consolas", 10), wrap="none")
+        code = tk.Text(body, height=10, font=("Consolas", 10), wrap="none")
         code.pack(fill="both", expand=True)
-        if cheat:
+        if cheat.get("lines"):
             code.insert("1.0", "\n".join(cheat["lines"]))
         result = {}
 
         def ok():
-            label = name.get().strip()
+            label = fields["name"].get().strip()
             if not label or any(ch in label for ch in "[]{}"):
                 messagebox.showerror("Name needed", "Give the cheat a name (without [ ] or { }).", parent=win)
                 return
@@ -1801,6 +1933,9 @@ class Editor(tk.Tk):
                 messagebox.showerror("Invalid code", str(e).replace("Line ", "Code line ", 1), parent=win)
                 return
             result["cheat"] = {"name": label, "lines": parsed[0]["lines"], "master": master.get(),
+                               "description": fields["description"].get().strip(),
+                               "author": fields["author"].get().strip(),
+                               "tested": {t: v.get() for t, v in tested.items()},
                                "on": bool(cheat.get("on")) if cheat else master.get()}
             win.destroy()
 
@@ -1833,7 +1968,7 @@ class Editor(tk.Tk):
     def delete_cheats(self):
         sel = self.selected_cheats()
         if not sel or not messagebox.askyesno("Delete cheats", f"Delete {len(sel)} cheat"
-                                              f"{'s' if len(sel) != 1 else ''} from your list?"):
+                                              f"{'s' if len(sel) != 1 else ''} from your library?"):
             return
         self.cheats = [c for n, c in enumerate(self.cheats) if n not in sel]
         self.store_cheat_library()

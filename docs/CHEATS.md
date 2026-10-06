@@ -6,6 +6,7 @@
 - [How cheats work](#how-cheats-work)
 - [Will a code work for me?](#will-a-code-work-for-me)
 - [Using cheats with the editor](#using-cheats-with-the-editor)
+- [The cheat library](#the-cheat-library)
 - [Where the files go](#where-the-files-go)
 - [Code format](#code-format)
 - [Making your own cheats](#making-your-own-cheats)
@@ -65,6 +66,19 @@ Most codes work everywhere, but emulators don't behave identically, so **test a 
 6. **Restart the game.** Cheats are loaded when the game starts.
 
 To stop a cheat, turn it off and click **Install to emulator** again, or click **Remove from emulator**. Your list stays in the app either way.
+
+---
+
+## The cheat library
+
+Every cheat you add in the editor is saved in the **`cheats`** folder next to the app, filed by game version:
+
+```
+cheats/0100BC0018138000 - Super Mario RPG/v1.0.0 - E968832CADE2AD7C/
+    E968832CADE2AD7C.txt   info.json   README.md
+```
+
+Only the game version gets its own folder. Emulators and Switch firmware don't, because one code file works on all of them. Instead, each cheat records where it was **tested**: Ryujinx, the yuzu family and Switch, each marked ✅ works, ❌ doesn't work or ❔ untested. Set these in **Add cheat…** / **Edit…**. **Open cheats folder** on the Cheats tab takes you there. See [cheats/README.md](../cheats/README.md) for the full layout.
 
 ---
 
