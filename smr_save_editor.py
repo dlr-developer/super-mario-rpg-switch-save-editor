@@ -2472,4 +2472,10 @@ class Editor(tk.Tk):
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        try:   # own taskbar entry and icon, instead of grouping under Python
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("dlrdev.SuperMarioRPGSwitchSaveEditor")
+        except Exception:
+            pass
     Editor(sys.argv[1] if len(sys.argv) > 1 else None).mainloop()

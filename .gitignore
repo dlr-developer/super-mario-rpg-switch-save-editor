@@ -5,6 +5,9 @@ backups/
 # Built app: attach it to a GitHub Release instead of committing it
 *.exe
 
+# Personal shortcuts (they contain paths to this PC)
+*.lnk
+
 # Python
 __pycache__/
 *.pyc

@@ -78,7 +78,9 @@ Works with saves from a real Switch and from every major Switch emulator.
 | 🐍 **Any OS (from source)** | Install [Python 3.8+](https://www.python.org/downloads/) and run `python smr_save_editor.py`. On Windows you can also double-click `Open Save Editor.bat`. On Linux, also install `python3-tk`. |
 
 > [!NOTE]
-> Windows SmartScreen may warn about the `.exe` because it isn't code-signed. Click **More info → Run anyway**, or run the Python version instead.
+> **The `.exe` isn't code-signed yet**, so Windows may stop it:
+> - **SmartScreen** ("Windows protected your PC"): click **More info → Run anyway**.
+> - **Smart App Control** ("This app has been blocked"): there's no "run anyway" option. Use the **Python version** instead. Python is signed, so Smart App Control allows it. Install [Python](https://www.python.org/downloads/), then double-click `Open Save Editor.bat`. Turning Smart App Control off isn't recommended, because on many PCs it can't be turned back on without resetting Windows.
 
 ---
 
