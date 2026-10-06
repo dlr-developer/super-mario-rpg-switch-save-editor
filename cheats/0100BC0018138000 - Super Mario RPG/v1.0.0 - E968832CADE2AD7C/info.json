@@ -1,0 +1,621 @@
+{
+  "game": "Super Mario RPG",
+  "title_id": "0100BC0018138000",
+  "version": "v1.0.0",
+  "build_id": "E968832CADE2AD7C",
+  "credits": [
+    "Cheat codes by **khuong**. Reformatted for this library; the codes themselves are unchanged."
+  ],
+  "cheats": [
+    {
+      "name": "Master Code",
+      "description": "Shared code the other cheats in this set rely on. Installed automatically when any of them is on.",
+      "master": true,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "00. Restore Code (Switch only)",
+      "description": "Switch only, for EdiZon/Breeze: puts the game back to normal after you turn cheats off while it runs. Don't turn it on together with other cheats. On emulators, just turn cheats off and restart the game.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "01. Infinite HP",
+      "description": "Your party's HP never goes down.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "02. Infinite FP (Flower Points)",
+      "description": "Flower Points never go down.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "03a. Enemies 0-50% Stronger",
+      "description": "Each enemy gets a random strength boost in this range. Turn on only one of the 03 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "03b. Enemies 50-100% Stronger",
+      "description": "Each enemy gets a random strength boost in this range. Turn on only one of the 03 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "03c. Enemies 100-200% Stronger",
+      "description": "Each enemy gets a random strength boost in this range. Turn on only one of the 03 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04a. Player Damage x0.5",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04b. Player Damage x1",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04c. Player Damage x1.5",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04d. Player Damage x2",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04e. Player Damage x3",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04f. Player Damage x4",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "04g. Player Damage x5",
+      "description": "Multiplies the damage your party deals. Turn on only one of the 04 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05a. Enemy Damage x0",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05b. Enemy Damage x0.5",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05c. Enemy Damage x1",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05d. Enemy Damage x2",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05e. Enemy Damage x3",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05f. Enemy Damage x4",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05g. Enemy Damage x5",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "05h. Enemy Damage x10",
+      "description": "Multiplies the damage enemies deal to you (x0 means no damage). Turn on only one of the 05 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "06. Infinite Item Usage",
+      "description": "Using an item doesn't use it up.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "07. 100% Hit Chance",
+      "description": "Your attacks never miss.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "08a. Auto Action Commands (Attack)",
+      "description": "Attack timing is always perfect. Turn on 08a or 08b, not both.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "08b. Auto Action Commands (Attack and Defense)",
+      "description": "Attack and defense timing are always perfect. Turn on 08a or 08b, not both.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "09. Action Gauge Always Full",
+      "description": "The Action Gauge stays full.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "10. 999 Chain (After a Successful Chain)",
+      "description": "After a successful chain, the chain counter jumps to 999.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "11. Always Escape Battles",
+      "description": "Running away from battle always works.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "12a. 100% Item Drop Rate (Normal Drops)",
+      "description": "Enemies always drop their normal item. Turn on 12a or 12b, not both.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "12b. 100% Item Drop Rate (Prefer Rare Drops)",
+      "description": "Enemies always drop an item, preferring their rare one. Turn on 12a or 12b, not both.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "13. Always Perfect Super & Ultra Jumps (Hold ZR to Stop)",
+      "description": "Super Jumps and Ultra Jumps are always timed perfectly. Hold ZR to stop jumping.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "14. Bonus Flower Always Drops",
+      "description": "A bonus flower always drops after battle.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "15. Always Special Enemies",
+      "description": "Battles always include special enemies.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "16a. EXP x2",
+      "description": "Multiplies the EXP you earn. Turn on only one of the 16 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "16b. EXP x4",
+      "description": "Multiplies the EXP you earn. Turn on only one of the 16 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "16c. EXP x8",
+      "description": "Multiplies the EXP you earn. Turn on only one of the 16 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "16d. EXP x9",
+      "description": "Multiplies the EXP you earn. Turn on only one of the 16 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "17a. Coins x2",
+      "description": "Multiplies the coins you earn. Turn on only one of the 17 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "17b. Coins x4",
+      "description": "Multiplies the coins you earn. Turn on only one of the 17 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "17c. Coins x8",
+      "description": "Multiplies the coins you earn. Turn on only one of the 17 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "17d. Coins x9",
+      "description": "Multiplies the coins you earn. Turn on only one of the 17 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "18a. Frog Coins x2",
+      "description": "Multiplies the Frog Coins you earn. Turn on only one of the 18 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "18b. Frog Coins x4",
+      "description": "Multiplies the Frog Coins you earn. Turn on only one of the 18 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "18c. Frog Coins x8",
+      "description": "Multiplies the Frog Coins you earn. Turn on only one of the 18 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "18d. Frog Coins x9",
+      "description": "Multiplies the Frog Coins you earn. Turn on only one of the 18 cheats.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "19. All Items Cost 0 Coins",
+      "description": "Everything in shops costs 0 coins.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "20. Free Purchases (Coins & Frog Coins)",
+      "description": "Buying things doesn't take any coins or Frog Coins.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "21. Movement Speed Up",
+      "description": "Mario moves faster.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "22. Jump Height Up",
+      "description": "Mario jumps higher.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "23a. Ignore Enemy Encounters (On)",
+      "description": "Touching enemies on the map doesn't start a battle. Use 23b to switch this back off while playing.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "23b. Ignore Enemy Encounters (Off)",
+      "description": "Switches 23a back off (enemies start battles again).",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "24. 2x Reward in the Egg Shuffle Game",
+      "description": "Double reward in the egg shuffle game.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "25. Midas River: No Fish Hits",
+      "description": "The fish in the Midas River barrel ride never hit you.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "26. Auto Yoshi Race",
+      "description": "The Yoshi race plays itself.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "27. Goomba Thumping High Score",
+      "description": "Sets a high score in the Goomba Thumping minigame.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "28. Add 1 of Every Item (After Buying Anything)",
+      "description": "Buying anything adds 1 of every item. Includes key items, which may affect story progress.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "29. All Consumable Items (Check the Storage Box)",
+      "description": "Puts every consumable item in the Storage Box at Mario's Pad.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "30a. Force Item Drop (Edit the Item Value)",
+      "description": "Every enemy drops the item set by the last code line (00000040 here). Needs 12a or 12b. Item values: https://docs.google.com/spreadsheets/d/e/2PACX-1vRbw5pNbLt_aTgJGIZ8Ti1TAnw8aBIa1teZPr8sSyfu_oLQcvluR8R28Cko8R0pcvkMEZWzY-BHpQQV/pubhtml",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "30b. Force Item Drop (Off)",
+      "description": "Switches 30a back off.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "31. 5 of Every Shared Gear (Use Any Item After)",
+      "description": "Gives you 5 of every piece of gear all characters can wear. Use any item afterwards to refresh.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    }
+  ]
+}

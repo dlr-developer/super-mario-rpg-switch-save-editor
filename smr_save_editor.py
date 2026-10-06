@@ -495,7 +495,7 @@ def read_library(bid):
     return cheats
 
 
-def write_library(bid, cheats):
+def write_library(bid, cheats, credits=None):
     """Write a build's folder: <build ID>.txt (ready for any emulator), info.json, README.md.
 
     Known game versions always keep their folder (with a "no cheats yet" README) so the library
@@ -517,9 +517,15 @@ def write_library(bid, cheats):
             f.write(header + "No cheats for this version yet. Add some on the editor's **Cheats** tab and "
                     "they'll be filed here automatically. See the [cheat guide](../../../docs/CHEATS.md).\n")
         return
+    if credits is None:   # keep the credits already recorded for this version
+        try:
+            credits = json.load(open(os.path.join(folder, "info.json"), encoding="utf-8")).get("credits", [])
+        except (OSError, ValueError):
+            credits = []
     with open(os.path.join(folder, bid + ".txt"), "w", encoding="utf-8", newline="\n") as f:
         f.write(format_cheats(cheats))
     info = {"game": "Super Mario RPG", "title_id": TITLE_ID, "version": version, "build_id": bid,
+            "credits": credits,
             "cheats": [{"name": c["name"], "description": c.get("description", ""),
                         "master": bool(c.get("master")),
                         "tested": {t: c.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}}
@@ -536,7 +542,9 @@ def write_library(bid, cheats):
         f.write(header + "\n".join(rows) + "\n\n✅ works · ❌ doesn't work · ❔ untested\n\n"
                 "Install with the editor's **Cheats** tab (**Import cheat file…** and pick "
                 f"`{bid}.txt`), or copy `{bid}.txt` into your emulator's cheat folder. "
-                "See the [cheat guide](../../../docs/CHEATS.md).\n")
+                "The master code is installed automatically whenever another cheat is on. "
+                "See the [cheat guide](../../../docs/CHEATS.md).\n"
+                + ("\n## Credits\n\n" + "\n".join(f"- {c}" for c in credits) + "\n" if credits else ""))
 
 
 def ensure_known_folders():
@@ -1909,7 +1917,7 @@ class Editor(tk.Tk):
                                                 "names:\n\n" + "\n".join(replaced[:12]) + "\n\nReplace them?"):
             new = [c for c in new if c["name"] not in names]
         for c in new:
-            c.setdefault("on", False)
+            c.setdefault("on", bool(c.get("master")))   # master codes start switched on
             c.setdefault("description", "")
             c.setdefault("tested", {t: "Untested" for t in TEST_TARGETS})
             if c["name"] in names:
@@ -2063,7 +2071,7 @@ class Editor(tk.Tk):
                                 "Switch (SD card) instead.")
             return
         bid = self.current_build()
-        on = [c for c in self.cheats if c.get("on")]
+        on = self.active_cheats()
         path = os.path.join(self.emulator["cheat_dir"], bid + ".txt")
         try:
             if on:
@@ -2079,12 +2087,22 @@ class Editor(tk.Tk):
             messagebox.showerror("Install failed", str(e))
             return
         self.refresh_cheats()
+        regular = [c for c in on if not c.get("master")]
+        masters = len(on) - len(regular)
         extra = ("" if self.emulator["enabled_file"] else "\n\nIn your emulator, make sure the "
                  f"'{CHEAT_MOD_NAME}' add-on is enabled for Super Mario RPG.")
-        messagebox.showinfo("Cheats installed", f"{len(on)} cheat{'s' if len(on) != 1 else ''} installed "
-                            f"for {self.emulator['name']}.\n\nRestart the game for the changes to take "
-                            f"effect.{extra}")
-        self.status.set(f"Installed {len(on)} cheats to {self.emulator['cheat_dir']}")
+        messagebox.showinfo("Cheats installed", f"{len(regular)} cheat{'s' if len(regular) != 1 else ''} installed "
+                            f"for {self.emulator['name']}" + (f", plus the master code they need" if masters else "")
+                            + f".\n\nRestart the game for the changes to take effect.{extra}")
+        self.status.set(f"Installed {len(regular)} cheats to {self.emulator['cheat_dir']}")
+
+    def active_cheats(self):
+        """The cheats to install: those switched on, plus every master code whenever at least one
+        regular cheat is on (cheats in a set depend on their master code)."""
+        regular = [c for c in self.cheats if c.get("on") and not c.get("master")]
+        if not regular:
+            return []
+        return [c for c in self.cheats if c.get("master")] + regular
 
     def uninstall_cheats(self):
         if not self.emulator or self.need_build():
@@ -2104,7 +2122,7 @@ class Editor(tk.Tk):
     def export_cheats(self):
         if self.need_build():
             return
-        on = [c for c in self.cheats if c.get("on")]
+        on = self.active_cheats()
         if not on:
             messagebox.showinfo("Nothing to export", "Turn on at least one cheat first.")
             return
