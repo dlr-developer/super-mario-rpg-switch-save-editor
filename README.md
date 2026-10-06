@@ -506,6 +506,8 @@ It sets level 30, 9,999 EXP (the game's cap, enough for level 30), 999 HP and 25
 
 That's the most of one item you can carry. Anything above it goes to the Storage Box at Mario's Pad, which the editor lets you fill as well (up to 99 per item).
 
+There's also a **total** limit: the save stores your bag as a fixed list of **1,200 slots**, one per item you carry. There are 44 kinds of items, so 30 of every one would be 1,320, which doesn't fit. The Items tab shows how many slots you're using, and the editor won't save more than the game has room for. Writing past it could break the save. The Storage Box doesn't share this limit, so put extras there.
+
 </details>
 
 <details>
