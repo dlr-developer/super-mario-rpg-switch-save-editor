@@ -780,26 +780,34 @@ class Editor(tk.Tk):
         # Items
         it = ttk.Frame(nb, padding=12)
         nb.add(it, text="Items")
+        bag = ttk.Frame(it)
+        bag.grid(row=0, column=0, columnspan=7, sticky="ew")
+        ttk.Label(bag, text="Bag space", font=("Segoe UI", 10, "bold")).pack(side="left")
+        self.bag_bar = ttk.Progressbar(bag, length=300)
+        self.bag_bar.pack(side="left", padx=10)
+        self.bag_count = tk.StringVar()
+        self.bag_label = ttk.Label(bag, textvariable=self.bag_count, style="Muted.TLabel")
+        self.bag_label.pack(side="left")
         self.tree = self._make_tree(it, (("id", "ID", 50), ("name", "Item", 200), ("menu", "Menu", 160),
-                                         ("qty", "Carried", 80), ("box", "Storage Box", 90)))
+                                         ("qty", "Carried", 80), ("box", "Storage Box", 90)), row=1)
         self.tree.bind("<<TreeviewSelect>>", self.on_item_select)
-        ttk.Label(it, text="Item").grid(row=1, column=0, sticky="w", pady=(10, 0))
-        ttk.Label(it, text=f"Carried (0–{CARRY_MAX})").grid(row=1, column=1, sticky="w", pady=(10, 0))
-        ttk.Label(it, text=f"Storage Box (0–{STORAGE_MAX})").grid(row=1, column=2, sticky="w", pady=(10, 0))
+        ttk.Label(it, text="Item").grid(row=2, column=0, sticky="w", pady=(10, 0))
+        ttk.Label(it, text=f"Carried (0–{CARRY_MAX})").grid(row=2, column=1, sticky="w", pady=(10, 0))
+        ttk.Label(it, text=f"Storage Box (0–{STORAGE_MAX})").grid(row=2, column=2, sticky="w", pady=(10, 0))
         self.item_pick = tk.StringVar()
         self.item_qty = tk.StringVar()
         self.item_box = tk.StringVar()
         pick = ttk.Combobox(it, textvariable=self.item_pick, state="readonly", width=28,
                             values=[item_label(i) for i in CONSUMABLE_RANGE])
-        pick.grid(row=2, column=0, sticky="w")
+        pick.grid(row=3, column=0, sticky="w")
         pick.bind("<<ComboboxSelected>>", self.on_pick)
-        ttk.Spinbox(it, from_=0, to=CARRY_MAX, textvariable=self.item_qty, width=8).grid(row=2, column=1, sticky="w", padx=4)
-        ttk.Spinbox(it, from_=0, to=STORAGE_MAX, textvariable=self.item_box, width=8).grid(row=2, column=2, sticky="w", padx=4)
-        ttk.Button(it, text="Set", command=self.set_item).grid(row=2, column=3, padx=4)
-        ttk.Button(it, text=f"Max carried ({CARRY_MAX})", command=self.max_items).grid(row=2, column=4)
+        ttk.Spinbox(it, from_=0, to=CARRY_MAX, textvariable=self.item_qty, width=8).grid(row=3, column=1, sticky="w", padx=4)
+        ttk.Spinbox(it, from_=0, to=STORAGE_MAX, textvariable=self.item_box, width=8).grid(row=3, column=2, sticky="w", padx=4)
+        ttk.Button(it, text="Set", command=self.set_item).grid(row=3, column=3, padx=4)
+        ttk.Button(it, text=f"Max carried ({CARRY_MAX})", command=self.max_items).grid(row=3, column=4)
 
         bulk = ttk.LabelFrame(it, text="Selected items", padding=8)
-        bulk.grid(row=3, column=0, columnspan=6, sticky="ew", pady=(10, 0))
+        bulk.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(10, 0))
         ttk.Button(bulk, text="Select all", command=self.select_all_items).grid(row=0, column=0)
         ttk.Button(bulk, text="Clear", command=lambda: self.tree.selection_set(())).grid(row=0, column=1, padx=4)
         self.sel_count = tk.StringVar(value="0 selected")
@@ -814,15 +822,13 @@ class Editor(tk.Tk):
         ttk.Button(bulk, text="Apply", command=lambda: self.bulk_set("storage")).grid(row=0, column=8)
         self.show_all_items = tk.BooleanVar(value=False)
         ttk.Checkbutton(bulk, text="Show all items, including ones you don't have", variable=self.show_all_items,
-                        command=self.refresh_items).grid(row=1, column=0, columnspan=6, sticky="w", pady=(6, 0))
-        self.bag_count = tk.StringVar()
-        self.bag_label = ttk.Label(bulk, textvariable=self.bag_count, style="Muted.TLabel")
-        self.bag_label.grid(row=1, column=6, columnspan=3, sticky="e", pady=(6, 0))
+                        command=self.refresh_items).grid(row=1, column=0, columnspan=9, sticky="w", pady=(6, 0))
 
         ttk.Label(it, style="Muted.TLabel", wraplength=820, text=(
             f"Click a row to edit one item, or Ctrl/Shift-click (or Select all) to change many at "
-            f"once. You can carry up to {CARRY_MAX} of each item. Anything over that belongs in "
-            f"the Storage Box at Mario's Pad.")).grid(row=4, column=0, columnspan=6, sticky="w", pady=(8, 0))
+            f"once. You can carry up to {CARRY_MAX} of each item, and the bag holds a set number of "
+            f"items in total (Bag space above). Extras belong in the Storage Box at Mario's Pad.")).grid(
+            row=5, column=0, columnspan=6, sticky="w", pady=(8, 0))
 
         # Equipment bag & key items
         eq = ttk.Frame(nb, padding=12)
@@ -1208,9 +1214,11 @@ class Editor(tk.Tk):
     def update_bag_count(self):
         used, cap = sum(self.items.values()), self.bag_capacity()
         over = used > cap
-        self.bag_count.set(f"Bag: {used:,} / {cap:,} item slots" +
-                           (f"  ·  {used - cap:,} too many to save" if over else ""))
+        self.bag_count.set(f"{used:,} / {cap:,} items" +
+                           (f"   ·   {used - cap:,} too many to save" if over else f"   ·   {cap - used:,} free"))
         self.bag_label.configure(style="Alert.TLabel" if over else "Muted.TLabel")
+        self.bag_bar.configure(maximum=cap, value=min(used, cap),
+                               style="Over.Horizontal.TProgressbar" if over else "Horizontal.TProgressbar")
 
     def recovery(self, i):
         """Which menu an item is in: as the game filed it in this save, else the default."""
@@ -1631,6 +1639,8 @@ class Editor(tk.Tk):
         style.configure("Faint.TLabel", foreground=p["faint"])
         style.configure("Warn.TLabel", foreground=p["warn"], font=(font, 12, "bold"))
         style.configure("Alert.TLabel", foreground=p["warn"], font=(font, 9, "bold"))
+        style.configure("Over.Horizontal.TProgressbar", background=p["warn"], lightcolor=p["warn"],
+                        darkcolor=p["warn"])
         style.configure("Banner.TFrame", background=p["banner"])
         style.configure("Banner.TLabel", background=p["banner"], foreground=p["fg"])
         style.configure("BannerTitle.TLabel", background=p["banner"], foreground=p["warn"], font=(font, 11, "bold"))
