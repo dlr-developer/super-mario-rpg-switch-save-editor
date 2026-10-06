@@ -814,7 +814,10 @@ class Editor(tk.Tk):
         ttk.Button(bulk, text="Apply", command=lambda: self.bulk_set("storage")).grid(row=0, column=8)
         self.show_all_items = tk.BooleanVar(value=False)
         ttk.Checkbutton(bulk, text="Show all items, including ones you don't have", variable=self.show_all_items,
-                        command=self.refresh_items).grid(row=1, column=0, columnspan=9, sticky="w", pady=(6, 0))
+                        command=self.refresh_items).grid(row=1, column=0, columnspan=6, sticky="w", pady=(6, 0))
+        self.bag_count = tk.StringVar()
+        self.bag_label = ttk.Label(bulk, textvariable=self.bag_count, style="Muted.TLabel")
+        self.bag_label.grid(row=1, column=6, columnspan=3, sticky="e", pady=(6, 0))
 
         ttk.Label(it, style="Muted.TLabel", wraplength=820, text=(
             f"Click a row to edit one item, or Ctrl/Shift-click (or Select all) to change many at "
@@ -1196,6 +1199,18 @@ class Editor(tk.Tk):
         self.tree.selection_set([k for k in keep if self.tree.exists(k)])
         self.apply_sort(self.tree)
         self.on_item_select(None)
+        self.update_bag_count()
+
+    def bag_capacity(self):
+        """The save keeps one slot per carried item in a fixed-size list (1,200 in this game)."""
+        return len(self.data["_item_manager"]["_item_list"]) if self.data else 1200
+
+    def update_bag_count(self):
+        used, cap = sum(self.items.values()), self.bag_capacity()
+        over = used > cap
+        self.bag_count.set(f"Bag: {used:,} / {cap:,} item slots" +
+                           (f"  ·  {used - cap:,} too many to save" if over else ""))
+        self.bag_label.configure(style="Alert.TLabel" if over else "Muted.TLabel")
 
     def recovery(self, i):
         """Which menu an item is in: as the game filed it in this save, else the default."""
@@ -1615,6 +1630,7 @@ class Editor(tk.Tk):
         style.configure("Muted.TLabel", foreground=p["muted"])
         style.configure("Faint.TLabel", foreground=p["faint"])
         style.configure("Warn.TLabel", foreground=p["warn"], font=(font, 12, "bold"))
+        style.configure("Alert.TLabel", foreground=p["warn"], font=(font, 9, "bold"))
         style.configure("Banner.TFrame", background=p["banner"])
         style.configure("Banner.TLabel", background=p["banner"], foreground=p["fg"])
         style.configure("BannerTitle.TLabel", background=p["banner"], foreground=p["warn"], font=(font, 11, "bold"))
@@ -2108,7 +2124,9 @@ class Editor(tk.Tk):
         heal = expand(self.recovery)
         battle = expand(lambda i: not self.recovery(i))
         if len(heal) + len(battle) > size:
-            raise ValueError(f"Too many items in total (limit {size}).")
+            raise ValueError(f"You're carrying {len(heal) + len(battle):,} items, but the save only has room "
+                             f"for {size:,} in total (one slot per item). Lower some Carried amounts, or move "
+                             "the extra to the Storage Box, which has no shared limit.")
         if len(self.equipment) > len(im["_equipment_item_list"]):
             raise ValueError("Too many pieces of equipment.")
         im["_item_list"] = pad(expand(lambda i: True), size)
