@@ -76,7 +76,8 @@ Works with saves from a real Switch and from every major Switch emulator.
 |---|---|
 | 🪟 **Windows (recommended)** | Download **`Super-Mario-RPG-Switch-Save-Editor-Portable.zip`** from the [**latest release**](../../releases/latest), unzip it anywhere, and double-click **`Super Mario RPG Switch Save Editor.exe`** inside. Nothing to install, and it works with **Smart App Control**: the program you start is the official Python runtime, signed by the Python Software Foundation, bundled with the editor. |
 | 🪟 **Windows (single file)** | **`Super-Mario-RPG-Switch-Save-Editor.exe`** from the same release. Handier, but it isn't code-signed yet (see below). |
-| 🐍 **Any OS (from source)** | Install [Python 3.8+](https://www.python.org/downloads/) and run `python smr_save_editor.py`. On Windows you can also double-click `Open Save Editor.bat`. On Linux, also install `python3-tk`. |
+| 🐧 **Linux / Steam Deck / macOS** | Download the source (**Code → Download ZIP**, or the release's *Source code* zip), then run `Super Mario RPG Switch Save Editor.sh`. Needs Python 3 with Tk; see **Linux & Steam Deck** under [Instructions by system](#-instructions-by-system). |
+| 🐍 **From source (any OS)** | Install [Python 3.8+](https://www.python.org/downloads/) and run `python smr_save_editor.py`. On Windows you can also double-click `Super Mario RPG Switch Save Editor.bat`. |
 
 > [!NOTE]
 > **The single-file `.exe` isn't code-signed yet**, so Windows may stop it:
@@ -119,6 +120,7 @@ The save files are the same on every system. Only where they live is different.
 | Windows (portable) | `<Ryujinx folder>\portable\bis\user\save\<number>\` |
 | macOS | `~/Library/Application Support/Ryujinx/bis/user/save/<number>/` |
 | Linux | `~/.config/Ryujinx/bis/user/save/<number>/` |
+| Linux (Flatpak / Steam Deck) | `~/.var/app/<Ryujinx app id>/config/Ryujinx/bis/user/save/<number>/` |
 
 </details>
 
@@ -136,6 +138,34 @@ The save files are the same on every system. Only where they live is different.
 |---|---|
 | Windows | `%APPDATA%\<emulator>\nand\user\save\0000000000000000\<user id>\0100BC0018138000\` |
 | Linux | `~/.local/share/<emulator>/nand/user/save/0000000000000000/<user id>/0100BC0018138000/` |
+| Linux (Flatpak / Steam Deck) | `~/.var/app/<emulator app id>/data/<emulator>/nand/user/save/…/0100BC0018138000/` |
+
+</details>
+
+<details>
+<summary><b>🐧 Linux & Steam Deck</b></summary>
+
+<br>
+
+The editor runs on Linux with Python 3 and Tk. Most distributions already have Python; Tk is a small extra package:
+
+| Distribution | Install Tk |
+|---|---|
+| Ubuntu, Debian, Mint, Pop!_OS | `sudo apt install python3-tk` |
+| Fedora | `sudo dnf install python3-tkinter` |
+| Arch, Manjaro, EndeavourOS | `sudo pacman -S tk` |
+| openSUSE | `sudo zypper install python3-tk` |
+
+Then download the source, open a terminal in its folder, and run:
+
+```sh
+./"Super Mario RPG Switch Save Editor.sh"
+```
+
+The editor finds Ryujinx and yuzu-family saves automatically, including **Flatpak** installs (`~/.var/app/…`), which is how most Steam Deck setups (like EmuDeck) install emulators. Cheats install into the same emulator folders.
+
+> [!NOTE]
+> **Steam Deck:** switch to **Desktop Mode** to run the editor. SteamOS's system files are read-only, so if Tk is missing you can't install it with `pacman`. Use a container instead (for example [Distrobox](https://github.com/89luca89/distrobox) with Ubuntu, then `sudo apt install python3-tk`). Linux support is new, so please [open an issue](../../issues) if something doesn't work.
 
 </details>
 

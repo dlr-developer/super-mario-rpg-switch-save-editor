@@ -2,6 +2,9 @@
 backups/
 **/backups/
 
+# Everything built for releases lives here (attach the downloads to a GitHub Release)
+builds/
+
 # Built app: attach it to a GitHub Release instead of committing it
 *.exe
 

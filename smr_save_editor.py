@@ -233,8 +233,12 @@ def candidate_roots():
     roots = []
     appdata = os.environ.get("APPDATA", "")
     home = os.path.expanduser("~")
-    for base in (appdata, os.path.join(home, ".config"), os.path.join(home, ".local", "share"),
-                 os.path.join(home, "Library", "Application Support")):
+    bases = [appdata, os.path.join(home, ".config"), os.path.join(home, ".local", "share"),
+             os.path.join(home, "Library", "Application Support")]
+    # Linux Flatpaks (most Linux and Steam Deck installs) keep data in ~/.var/app/<app id>/{config,data}
+    bases += glob.glob(os.path.join(glob.escape(os.path.join(home, ".var", "app")), "*", "config"))
+    bases += glob.glob(os.path.join(glob.escape(os.path.join(home, ".var", "app")), "*", "data"))
+    for base in bases:
         if not base:
             continue
         roots.append(os.path.join(base, "Ryujinx", "bis", "user", "save"))
@@ -609,9 +613,27 @@ THEMES = ("System", "Light", "Dark")
 
 
 def system_prefers_dark():
-    """True if Windows is set to dark mode for apps."""
+    """True if the system is set to dark mode for apps (Windows, macOS, GNOME/KDE on Linux)."""
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"],
+                                 capture_output=True, text=True, timeout=2).stdout
+            return "dark" in out.lower()
+        except (OSError, subprocess.SubprocessError):
+            return False
     if sys.platform != "win32":
-        return False
+        try:   # GNOME, and most desktops that follow the freedesktop colour-scheme setting
+            out = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+                                 capture_output=True, text=True, timeout=2).stdout
+            if "dark" in out.lower():
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+        try:   # KDE Plasma
+            kde = open(os.path.expanduser("~/.config/kdeglobals"), encoding="utf-8", errors="ignore").read()
+            return "colorscheme=" in kde.lower() and "dark" in kde.lower().split("colorscheme=", 1)[1].split("\n", 1)[0]
+        except OSError:
+            return False
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
