@@ -12,7 +12,7 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 <img src="docs/screenshot-characters.png" alt="Characters tab: stats and equipped gear" width="760">
 
-[Features](#-features) · [Download](#-download) · [How to use](#-how-to-use) · [Your system](#-instructions-by-system) · [Cheats](#-cheats) · [Item IDs](#-item-ids) · [FAQ](#-faq)
+[Features](#-features) · [Download](#-download) · [How to use](#-how-to-use) · [Your system](#-instructions-by-system) · [Walkthrough](#%EF%B8%8F-walkthrough) · [Cheats](#-cheats) · [Item IDs](#-item-ids) · [FAQ](#-faq)
 
 </div>
 
@@ -28,6 +28,8 @@ Works with saves from a real Switch and from every major Switch emulator.
 | 🎒 **Items & Storage Box** | Every consumable by name. Set how many you carry (up to 30) and how many are in the Storage Box at Mario's Pad. Multi-select or **Select all** to change many items at once |
 | 🗝️ **Equipment bag & key items** | Every piece of gear and every key item with how many you own, who can equip it and who's wearing it. Equip and unequip, multi-select, **Select all** and **Max owned**, with sensible limits |
 | 🎮 **Cheats** | Add or import cheat codes, switch them on and off, and install them into Ryujinx or a yuzu-family emulator in one click, or export them for a Switch running Atmosphère |
+| 🗺️ **Walkthrough** | Shows the chapter you're on, Star Pieces and hidden treasures found (read from your save), with one-click links to the Game8 chapter guides and IGN's hidden treasure locations |
+| 🌗 **Light & dark mode** | Light, Dark, or follow your Windows setting, including a dark title bar |
 | ↕️ **Sortable lists** | Click any column heading to sort; click again to reverse |
 | 🔍 **Review before saving** | A window lists every change, like *"Mario Weapon: Hammer → Super Hammer"*, before anything is written |
 | 🛟 **Backups** | Warns you before saving if your save isn't backed up, plus unlimited manual backups with notes and one-click restore |
@@ -46,9 +48,17 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 <img src="docs/screenshot-equipment.png" alt="Equipment Bag tab" width="760">
 
-**Cheats**
+**Walkthrough**
+
+<img src="docs/screenshot-walkthrough.png" alt="Walkthrough tab" width="760">
+
+**Cheats** (the two cheats shown are format examples, not real codes)
 
 <img src="docs/screenshot-cheats.png" alt="Cheats tab" width="760">
+
+**Dark mode**
+
+<img src="docs/screenshot-dark.png" alt="Dark mode" width="760">
 
 **General**
 
@@ -187,6 +197,19 @@ The files are plain JSON text encoded as UTF-16 LE. They have no checksum or enc
 
 ---
 
+## 🗺️ Walkthrough
+
+The **Walkthrough** tab reads your progress from the save you've loaded:
+
+- **Your chapter:** worked out from your Star Pieces, with a button that opens that chapter's guide.
+- **Star Pieces and hidden treasures:** progress bars showing how many you have. The game only records how many of the 39 hidden treasures you've found, not which ones.
+- **Every chapter:** marked done, current or upcoming. Double-click one to open its guide.
+- **A chest number box:** jumps straight to that hidden treasure's location.
+
+The guides are written by [Game8](https://game8.co/games/Super-Mario-RPG/archives/417834) and [IGN](https://www.ign.com/wikis/super-mario-rpg-switch-remake/Hidden_Treasure_Chest_Locations) and open in your web browser; they aren't copied into the app.
+
+---
+
 ## 🎮 Cheats
 
 Cheats change the game **while it's running** (things like infinite HP or EXP multipliers), so they aren't part of your save file. The **Cheats** tab manages them for you.
@@ -196,6 +219,7 @@ Cheats change the game **while it's running** (things like infinite HP or EXP mu
    [Cheat name]
    04000000 01234567 0000270F
    ```
+   *(This shows the format only. It isn't a real code for this game.)*
 2. **Import** a cheat file, or **Add cheat…** and paste a code. Invalid codes are rejected with a clear message.
 3. **Turn on** the cheats you want: double-click a row, or select rows and click **Turn on/off**.
 4. Click **Install to emulator**, then restart the game.
@@ -518,6 +542,7 @@ Click **Restore a backup…** and choose the newest backup from before your last
 ## 🙏 Credits
 
 - Item IDs and names: [Echocolat/SMR-save-edit-scripts](https://github.com/Echocolat/SMR-save-edit-scripts)
+- Walkthrough links: [Game8](https://game8.co/games/Super-Mario-RPG/archives/417834) and [IGN](https://www.ign.com/wikis/super-mario-rpg-switch-remake/Hidden_Treasure_Chest_Locations)
 - Equipment stats: [Nintendo Life](https://www.nintendolife.com/guides/super-mario-rpg-all-weapons-list), [Gamer Guides](https://gamerguides.com/super-mario-rpg-2023/guide/getting-started/basics/all-armor-in-super-mario-rpg), [Samurai Gamers](https://samurai-gamers.com/super-mario-rpg-remake/weapons-list-19/) and the [Super Mario Wiki](https://www.mariowiki.com/)
 
 ## 📄 License

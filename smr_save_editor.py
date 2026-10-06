@@ -355,6 +355,19 @@ def describe_changes(old, new):
 # ---------- cheats (Atmosphère cheat format, used by Ryujinx, the yuzu family and Atmosphère) ----------
 CHEAT_MOD_NAME = "SMR Save Editor Cheats"      # our own mod folder, so we never touch other cheat files
 CHEATS_URL = "https://www.cheatslips.com/game/super-mario-rpg"
+WALKTHROUGH_URL = "https://game8.co/games/Super-Mario-RPG/archives/417834"
+TREASURE_URL = "https://www.ign.com/wikis/super-mario-rpg-switch-remake/Hidden_Treasure_Chest_Locations"
+HIDDEN_TREASURES = 39
+CHAPTERS = [   # (chapter, goal, Game8 guide)
+    ("Chapter 1", "1st Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434340"),
+    ("Chapter 2", "2nd Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434357"),
+    ("Chapter 3", "3rd Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434362"),
+    ("Chapter 4", "4th Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434418"),
+    ("Chapter 5", "5th Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434356"),
+    ("Chapter 6", "6th Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434358"),
+    ("Chapter 7", "7th Star Piece", "https://game8.co/games/Super-Mario-RPG/archives/434419"),
+    ("Post-game", "Post-game content", "https://game8.co/games/Super-Mario-RPG/archives/431396"),
+]
 CHEAT_LINE = re.compile(r"^[0-9A-Fa-f]{8}( [0-9A-Fa-f]{8})*$")
 KNOWN_BUILDS = {"E968832CADE2AD7C": "v1.0.0"}
 
@@ -444,6 +457,32 @@ def detect_build_ids(emulator):
     return found
 
 
+PALETTES = {
+    "light": {"bg": "#f0f0f0", "surface": "#e6e6e6", "field": "#ffffff", "fg": "#000000", "muted": "#555555",
+              "faint": "#888888", "border": "#c8c8c8", "hover": "#dcdcdc", "select": "#0078d7",
+              "accent": "#0b5cad", "warn": "#b26a00", "tag_worn": "#0b5cad", "tag_key": "#6a4c93",
+              "tag_none": "#999999", "tag_on": "#2e7d32", "tag_off": "#888888"},
+    "dark": {"bg": "#1f2125", "surface": "#2b2e33", "field": "#26292e", "fg": "#e8e8e8", "muted": "#a9adb4",
+             "faint": "#7d828a", "border": "#3d4148", "hover": "#353940", "select": "#2f5f9e",
+             "accent": "#6cb4ff", "warn": "#ffb74d", "tag_worn": "#6cb4ff", "tag_key": "#c7a8ff",
+             "tag_none": "#6f747c", "tag_on": "#7fd88a", "tag_off": "#7d828a"},
+}
+THEMES = ("System", "Light", "Dark")
+
+
+def system_prefers_dark():
+    """True if Windows is set to dark mode for apps."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
+
+
 class Editor(tk.Tk):
     def __init__(self, folder=None):
         super().__init__()
@@ -473,20 +512,17 @@ class Editor(tk.Tk):
         self._style()
         self._build_top()
         self._build_tabs()
+        self.apply_theme()
         start = folder or self.settings.get("save_folder")
         start = resolve_save_folder(start) if start else None
         self.set_folder(start or autodetect())
 
     # ---------- layout ----------
     def _style(self):
-        style = ttk.Style(self)
-        font = "Segoe UI" if sys.platform == "win32" else "TkDefaultFont"
-        style.configure("TNotebook", tabmargins=(6, 8, 6, 0))
-        style.configure("TNotebook.Tab", padding=(20, 8), font=(font, 11))
-        style.map("TNotebook.Tab",
-                  font=[("selected", (font, 11, "bold"))],
-                  foreground=[("selected", "#0b5cad"), ("active", "#0b5cad")],
-                  expand=[("selected", (2, 4, 2, 0))])
+        self.style = ttk.Style(self)
+        self.base_theme = self.style.theme_use()      # the native look, used for Light
+        self.palette = PALETTES["light"]
+        self._style_common()
 
     def _build_top(self):
         top = ttk.Frame(self, padding=8)
@@ -513,11 +549,16 @@ class Editor(tk.Tk):
         ttk.Button(bk, text="Restore a backup…", command=self.restore_dialog).pack(side="left", padx=4)
         ttk.Button(bk, text="Open backups folder", command=self.open_backups).pack(side="left")
         self.backup_count = tk.StringVar()
-        ttk.Label(bk, textvariable=self.backup_count, foreground="#555").pack(side="left", padx=10)
+        ttk.Label(bk, textvariable=self.backup_count, style="Muted.TLabel").pack(side="left", padx=10)
+        self.theme_choice = tk.StringVar(value=self.settings.get("theme", "System"))
+        theme = ttk.Combobox(bk, textvariable=self.theme_choice, values=THEMES, state="readonly", width=8)
+        theme.pack(side="right")
+        theme.bind("<<ComboboxSelected>>", self.on_theme_pick)
+        ttk.Label(bk, text="Theme:").pack(side="right", padx=(0, 4))
         top.columnconfigure(1, weight=1)
 
         self.status = tk.StringVar(value="Close the game/emulator before saving or restoring.")
-        ttk.Label(self, textvariable=self.status, foreground="#555", padding=(8, 0)).pack(
+        ttk.Label(self, textvariable=self.status, style="Muted.TLabel", padding=(8, 0)).pack(
             side="bottom", fill="x", pady=4)
 
     def _build_tabs(self):
@@ -534,12 +575,12 @@ class Editor(tk.Tk):
             if key != "_play_time":
                 ttk.Button(gen, text="Max", width=6, command=lambda k=key: self.max_general(k)).grid(
                     row=r, column=2, sticky="w")
-            ttk.Label(gen, text=f"({lo}–{hi})", foreground="#888").grid(row=r, column=3, sticky="w", padx=(8, 0))
+            ttk.Label(gen, text=f"({lo}–{hi})", style="Faint.TLabel").grid(row=r, column=3, sticky="w", padx=(8, 0))
             self.general_vars[key] = (v, lo, hi)
         ttk.Button(gen, text="Max all", command=self.max_general).grid(
             row=len(GENERAL_FIELDS), column=1, sticky="w", padx=8, pady=(8, 0))
         self.info = tk.StringVar()
-        ttk.Label(gen, textvariable=self.info, foreground="#555", justify="left").grid(
+        ttk.Label(gen, textvariable=self.info, style="Muted.TLabel", justify="left").grid(
             row=len(GENERAL_FIELDS) + 1, column=0, columnspan=4, sticky="w", pady=(16, 0))
 
         # Characters
@@ -562,7 +603,7 @@ class Editor(tk.Tk):
             v = tk.StringVar()
             ttk.Spinbox(ch, from_=lo, to=hi, textvariable=v, width=14,
                         command=self.update_totals).grid(row=r, column=1, sticky="w", padx=8)
-            ttk.Label(ch, text=f"({lo}–{hi})", foreground="#888").grid(row=r, column=2, sticky="w")
+            ttk.Label(ch, text=f"({lo}–{hi})", style="Faint.TLabel").grid(row=r, column=2, sticky="w")
             self.char_vars[key] = (v, lo, hi)
 
         eqf = ttk.LabelFrame(ch, text="Equipped", padding=8)
@@ -577,9 +618,9 @@ class Editor(tk.Tk):
             self.gear_vars[slot] = v
             self.gear_boxes[slot] = box
         self.totals = tk.StringVar()
-        ttk.Label(eqf, textvariable=self.totals, foreground="#555", justify="left").grid(
+        ttk.Label(eqf, textvariable=self.totals, style="Muted.TLabel", justify="left").grid(
             row=6, column=0, sticky="w")
-        ttk.Label(ch, foreground="#555", wraplength=820, text=(
+        ttk.Label(ch, style="Muted.TLabel", wraplength=820, text=(
             "Only gear that character can wear is listed. Gear you don't own is added to your bag "
             "automatically. Stat changes and gear changes also update the 'with equipment' totals "
             "the menu shows. Switching characters keeps your unsaved edits. Max out sets level, EXP, "
@@ -625,7 +666,7 @@ class Editor(tk.Tk):
         ttk.Checkbutton(bulk, text="Show all items, including ones you don't have", variable=self.show_all_items,
                         command=self.refresh_items).grid(row=1, column=0, columnspan=9, sticky="w", pady=(6, 0))
 
-        ttk.Label(it, foreground="#555", wraplength=820, text=(
+        ttk.Label(it, style="Muted.TLabel", wraplength=820, text=(
             f"Click a row to edit one item, or Ctrl/Shift-click (or Select all) to change many at "
             f"once. You can carry up to {CARRY_MAX} of each item. Anything over that belongs in "
             f"the Storage Box at Mario's Pad.")).grid(row=4, column=0, columnspan=6, sticky="w", pady=(8, 0))
@@ -637,9 +678,6 @@ class Editor(tk.Tk):
                                             ("who", "Who can equip", 170), ("owned", "Owned", 70),
                                             ("worn", "Equipped by", 170)))
         self.eq_tree.bind("<<TreeviewSelect>>", self.on_equipment_select)
-        self.eq_tree.tag_configure("worn", foreground="#0b5cad")
-        self.eq_tree.tag_configure("key", foreground="#6a4c93")
-        self.eq_tree.tag_configure("none", foreground="#999")
 
         sel = ttk.LabelFrame(eq, text="Selected item", padding=8)
         sel.grid(row=1, column=0, columnspan=6, sticky="ew", pady=(10, 0))
@@ -673,7 +711,7 @@ class Editor(tk.Tk):
                         variable=self.show_all_gear, command=self.refresh_equipment).grid(
             row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))
 
-        ttk.Label(eq, foreground="#555", wraplength=820, text=(
+        ttk.Label(eq, style="Muted.TLabel", wraplength=820, text=(
             f"Limits: 1 of each item only one character can wear (e.g. Hammer), up to {SHARED_MAX} of "
             f"gear everyone can wear (e.g. Work Pants), and 1 of each key item. You can't own fewer "
             "copies than are being worn. Equipping here also updates the Characters tab.")).grid(
@@ -693,14 +731,12 @@ class Editor(tk.Tk):
         self.build_box.bind("<<ComboboxSelected>>", lambda e: self.load_cheats())
         self.build_box.bind("<FocusOut>", lambda e: self.load_cheats())
         self.build_note = tk.StringVar()
-        ttk.Label(top, textvariable=self.build_note, foreground="#555").grid(row=1, column=2, sticky="w", padx=6, pady=(6, 0))
+        ttk.Label(top, textvariable=self.build_note, style="Muted.TLabel").grid(row=1, column=2, sticky="w", padx=6, pady=(6, 0))
         ttk.Button(top, text="Detect again", command=self.detect_cheat_target).grid(row=1, column=3, padx=4, pady=(6, 0))
 
         self.cheat_tree = self._make_tree(ct, (("on", "On", 50), ("name", "Cheat", 330), ("kind", "Type", 110),
                                                ("lines", "Code lines", 90), ("installed", "In emulator", 110)),
                                           row=1, height=9)
-        self.cheat_tree.tag_configure("on", foreground="#2e7d32")
-        self.cheat_tree.tag_configure("off", foreground="#888")
         self.cheat_tree.bind("<Double-1>", lambda e: self.toggle_cheats())
 
         acts = ttk.Frame(ct)
@@ -717,13 +753,54 @@ class Editor(tk.Tk):
         ttk.Button(inst, text="Remove from emulator", command=self.uninstall_cheats).pack(side="left", padx=6)
         ttk.Button(inst, text="Export for Switch (SD card)…", command=self.export_cheats).pack(side="left")
         ttk.Button(inst, text="Find cheats online", command=lambda: webbrowser.open(CHEATS_URL)).pack(side="left", padx=6)
-        ttk.Label(ct, foreground="#555", wraplength=820, justify="left", text=(
+        ttk.Label(ct, style="Muted.TLabel", wraplength=820, justify="left", text=(
             "Cheats change the game while it runs. They aren't saved in your save file. Add or import "
             "codes in Atmosphère format ([Cheat name] followed by lines of 8-digit hex codes), turn on the "
             "ones you want, then click Install to emulator and restart the game. Codes only work for "
             "the game version they were made for, so check the build ID. Your cheat list is kept by "
             "this app, so it's safe to remove cheats from the emulator and install them again later.")).grid(
             row=4, column=0, columnspan=6, sticky="w", pady=(10, 0))
+        # Walkthrough
+        wk = ttk.Frame(nb, padding=12)
+        nb.add(wk, text="Walkthrough")
+        prog = ttk.LabelFrame(wk, text="Your progress (from this save)", padding=10)
+        prog.grid(row=0, column=0, columnspan=6, sticky="ew")
+        self.walk_now = tk.StringVar()
+        ttk.Label(prog, textvariable=self.walk_now, font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, columnspan=3, sticky="w")
+        self.walk_btn = self.primary_button(prog, "Open this chapter's guide", self.open_current_chapter)
+        self.walk_btn.grid(row=0, column=3, sticky="e", padx=(12, 0))
+        ttk.Label(prog, text="Star Pieces").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.star_bar = ttk.Progressbar(prog, maximum=7, length=260)
+        self.star_bar.grid(row=1, column=1, sticky="w", padx=8, pady=(8, 0))
+        self.star_text = tk.StringVar()
+        ttk.Label(prog, textvariable=self.star_text, style="Muted.TLabel").grid(row=1, column=2, sticky="w", pady=(8, 0))
+        ttk.Label(prog, text="Hidden treasures").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        self.treasure_bar = ttk.Progressbar(prog, maximum=HIDDEN_TREASURES, length=260)
+        self.treasure_bar.grid(row=2, column=1, sticky="w", padx=8, pady=(4, 0))
+        self.treasure_text = tk.StringVar()
+        ttk.Label(prog, textvariable=self.treasure_text, style="Muted.TLabel").grid(row=2, column=2, sticky="w", pady=(4, 0))
+        prog.columnconfigure(2, weight=1)
+
+        self.walk_tree = self._make_tree(wk, (("ch", "Chapter", 90), ("goal", "Goal", 300), ("status", "Status", 160),
+                                              ("guide", "Guide", 200)), row=1, height=8)
+        self.walk_tree.bind("<Double-1>", lambda e: self.open_selected_chapter())
+
+        row = ttk.Frame(wk)
+        row.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        ttk.Button(row, text="Open selected chapter", command=self.open_selected_chapter).pack(side="left")
+        ttk.Button(row, text="Full walkthrough (Game8)", command=lambda: webbrowser.open(WALKTHROUGH_URL)).pack(
+            side="left", padx=6)
+        ttk.Label(row, text="Hidden treasure chest:").pack(side="left", padx=(18, 4))
+        self.chest_pick = tk.StringVar(value="1")
+        ttk.Spinbox(row, from_=1, to=HIDDEN_TREASURES, textvariable=self.chest_pick, width=5).pack(side="left")
+        ttk.Button(row, text="Show location (IGN)", command=self.open_chest).pack(side="left", padx=4)
+        ttk.Button(row, text="All hidden treasures", command=lambda: webbrowser.open(TREASURE_URL)).pack(side="left")
+        ttk.Label(wk, style="Muted.TLabel", wraplength=820, justify="left", text=(
+            "Guides open in your web browser. The walkthrough is by Game8 and the hidden treasure guide is "
+            "by IGN. Your current chapter is worked out from the Star Pieces in this save; the hidden "
+            f"treasure count comes from the save too (the game doesn't record which of the {HIDDEN_TREASURES} "
+            "you've found, only how many).")).grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
         nb.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
     def _make_tree(self, parent, cols, row=0, height=12):
@@ -842,6 +919,7 @@ class Editor(tk.Tk):
         self.key_items = [i for i in im["_important_item_list"] if i]
         self.refresh_items(keep=())
         self.refresh_equipment()
+        self.refresh_walkthrough()
         self.status.set(f"Loaded {name}. Close the game/emulator before saving.")
 
     # ---------- characters ----------
@@ -1239,6 +1317,165 @@ class Editor(tk.Tk):
             messagebox.showinfo("Limits applied", "Some items were set to their limit, or to the "
                                 "number being worn:\n\n" + "\n".join(limited[:15]) +
                                 ("\n…" if len(limited) > 15 else ""))
+
+    # ---------- themes ----------
+    def theme_mode(self):
+        mode = self.settings.get("theme", "System")
+        if mode == "System":
+            return "dark" if system_prefers_dark() else "light"
+        return mode.lower()
+
+    def on_theme_pick(self, _=None):
+        self.settings["theme"] = self.theme_choice.get()
+        store_settings(self.settings)
+        self.apply_theme()
+
+    def apply_theme(self):
+        mode = self.theme_mode()
+        p = self.palette = PALETTES[mode]
+        style = self.style
+        if mode == "dark":
+            style.theme_use("clam")
+            style.configure(".", background=p["bg"], foreground=p["fg"], fieldbackground=p["field"],
+                            bordercolor=p["border"], lightcolor=p["surface"], darkcolor=p["surface"],
+                            troughcolor=p["bg"], selectbackground=p["select"], selectforeground=p["fg"],
+                            insertcolor=p["fg"], focuscolor=p["accent"])
+            style.map(".", foreground=[("disabled", p["faint"])])
+            style.configure("TButton", background=p["surface"], foreground=p["fg"], padding=(8, 3),
+                            bordercolor=p["border"])
+            style.map("TButton", background=[("pressed", p["border"]), ("active", p["hover"])])
+            for w in ("TEntry", "TCombobox", "TSpinbox"):
+                style.configure(w, fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"],
+                                background=p["surface"], bordercolor=p["border"])
+                style.map(w, fieldbackground=[("readonly", p["field"]), ("disabled", p["bg"])],
+                          foreground=[("readonly", p["fg"])], background=[("active", p["hover"])],
+                          selectbackground=[("readonly", p["field"])], selectforeground=[("readonly", p["fg"])])
+            style.configure("TCheckbutton", background=p["bg"], foreground=p["fg"], indicatorbackground=p["field"])
+            style.map("TCheckbutton", background=[("active", p["bg"])],
+                      indicatorbackground=[("selected", p["accent"]), ("active", p["hover"])])
+            style.configure("TLabelframe", background=p["bg"], bordercolor=p["border"])
+            style.configure("TLabelframe.Label", background=p["bg"], foreground=p["muted"])
+            style.configure("TNotebook", background=p["bg"], bordercolor=p["border"])
+            style.configure("TNotebook.Tab", background=p["surface"], foreground=p["muted"], bordercolor=p["border"])
+            style.map("TNotebook.Tab", background=[("selected", p["bg"]), ("active", p["hover"])])
+            style.configure("Treeview", background=p["field"], fieldbackground=p["field"], foreground=p["fg"],
+                            bordercolor=p["border"], rowheight=22)
+            style.configure("Treeview.Heading", background=p["surface"], foreground=p["fg"], bordercolor=p["border"],
+                            relief="flat")
+            style.map("Treeview.Heading", background=[("active", p["hover"])])
+            style.map("Treeview", background=[("selected", p["select"])], foreground=[("selected", "#ffffff")])
+            style.configure("Vertical.TScrollbar", background=p["hover"], troughcolor=p["bg"], gripcount=0,
+                            lightcolor=p["hover"], darkcolor=p["hover"], arrowcolor=p["fg"], bordercolor=p["bg"])
+            style.map("Vertical.TScrollbar", background=[("active", p["border"])])
+            style.configure("Horizontal.TProgressbar", background=p["tag_on"], troughcolor=p["field"],
+                            bordercolor=p["border"], lightcolor=p["tag_on"], darkcolor=p["tag_on"])
+        else:
+            style.theme_use(self.base_theme)
+        self._style_common()
+        # Plain tk widgets don't follow ttk styles: set them directly, now and for new ones.
+        for opt, value in (("*TCombobox*Listbox.background", p["field"]), ("*TCombobox*Listbox.foreground", p["fg"]),
+                           ("*TCombobox*Listbox.selectBackground", p["select"]),
+                           ("*TCombobox*Listbox.selectForeground", "#ffffff")):
+            self.option_add(opt, value)
+        self.configure(bg=p["bg"])
+        self._recolor(self)
+        for tree, tags in ((self.eq_tree, ("worn", "key", "none")), (self.cheat_tree, ("on", "off"))):
+            for tag in tags:
+                tree.tag_configure(tag, foreground=p["tag_" + tag])
+        self.walk_tree.tag_configure("on", foreground=p["tag_on"])
+        self.walk_tree.tag_configure("off", foreground=p["faint"])
+        self.theme_window(self)
+
+    def _style_common(self):
+        p, style = self.palette, self.style
+        font = "Segoe UI" if sys.platform == "win32" else "TkDefaultFont"
+        style.configure("TNotebook", tabmargins=(6, 8, 6, 0))
+        style.configure("TNotebook.Tab", padding=(20, 8), font=(font, 11))
+        style.map("TNotebook.Tab", font=[("selected", (font, 11, "bold"))],
+                  foreground=[("selected", p["accent"]), ("active", p["accent"])],
+                  expand=[("selected", (2, 4, 2, 0))])
+        style.configure("Muted.TLabel", foreground=p["muted"])
+        style.configure("Faint.TLabel", foreground=p["faint"])
+        style.configure("Warn.TLabel", foreground=p["warn"], font=(font, 12, "bold"))
+
+    def _recolor(self, widget):
+        p = self.palette
+        for w in widget.winfo_children():
+            if isinstance(w, tk.Toplevel):
+                w.configure(bg=p["bg"])
+            elif isinstance(w, (tk.Text, tk.Listbox)):
+                w.configure(bg=p["field"], fg=p["fg"], selectbackground=p["select"], selectforeground="#ffffff",
+                            highlightbackground=p["border"], highlightcolor=p["accent"])
+                if isinstance(w, tk.Text):
+                    w.configure(insertbackground=p["fg"])
+            self._recolor(w)
+
+    def theme_window(self, win):
+        """Color a window to match the theme, including the Windows title bar."""
+        p = self.palette
+        if win is not self:
+            win.configure(bg=p["bg"])
+            self._recolor(win)
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            win.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(win.winfo_id()) or win.winfo_id()
+            value = ctypes.c_int(1 if self.theme_mode() == "dark" else 0)
+            for attr in (20, 19):   # DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 11 / older Windows 10)
+                if ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(value), 4) == 0:
+                    break
+            # Redraw the frame so the title bar changes right away.
+            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0020)
+        except Exception:
+            pass
+
+    # ---------- walkthrough ----------
+    def current_chapter(self):
+        """Index into CHAPTERS of the chapter you're on: one past the Star Pieces you have."""
+        stars = star_count(self.data.get("_star_pieces", 0)) if self.data else 0
+        return min(stars, len(CHAPTERS) - 1)
+
+    def refresh_walkthrough(self):
+        self.walk_tree.delete(*self.walk_tree.get_children())
+        if not self.data:
+            self.walk_now.set("Load a save to see your progress.")
+            return
+        stars = star_count(self.data.get("_star_pieces", 0))
+        now = self.current_chapter()
+        found = self.data.get("_hidden_treasure_counter", 0)
+        title = CHAPTERS[now][0]
+        self.walk_now.set(f"You're on {title}: {CHAPTERS[now][1]}" if now < 7 else
+                          "All 7 Star Pieces collected! Next: the post-game content.")
+        self.star_bar["value"] = stars
+        self.star_text.set(f"{stars} / 7")
+        self.treasure_bar["value"] = min(found, HIDDEN_TREASURES)
+        self.treasure_text.set(f"{found} / {HIDDEN_TREASURES} found")
+        for n, (ch, goal, _) in enumerate(CHAPTERS):
+            status = "✔ Done" if n < now else "▶ You are here" if n == now else "Upcoming"
+            self.walk_tree.insert("", "end", iid=str(n), tags=("on",) if n == now else ("off",) if n > now else (),
+                                  values=(ch, goal, status, "Game8 · double-click to open"))
+        self.walk_tree.tag_configure("on", foreground=self.palette["tag_on"])
+        self.walk_tree.tag_configure("off", foreground=self.palette["faint"])
+        self.walk_tree.selection_set(str(now))
+        self.walk_tree.see(str(now))
+        self.apply_sort(self.walk_tree)
+
+    def open_current_chapter(self):
+        webbrowser.open(CHAPTERS[self.current_chapter()][2])
+
+    def open_selected_chapter(self):
+        sel = self.walk_tree.selection()
+        if sel:
+            webbrowser.open(CHAPTERS[int(sel[0])][2])
+
+    def open_chest(self):
+        try:
+            n = max(1, min(HIDDEN_TREASURES, int(self.chest_pick.get())))
+        except ValueError:
+            n = 1
+        webbrowser.open(f"{TREASURE_URL}#Hidden_Treasure_Chest_{n}")
 
     # ---------- sorting ----------
     def sort_by(self, tree, col):
@@ -1689,8 +1926,7 @@ class Editor(tk.Tk):
         win.grab_set()
         body = ttk.Frame(win, padding=16)
         body.pack(fill="both")
-        ttk.Label(body, text="⚠  Your save isn't backed up", font=("Segoe UI", 12, "bold"),
-                  foreground="#b26a00").pack(anchor="w")
+        ttk.Label(body, text="⚠  Your save isn't backed up", style="Warn.TLabel").pack(anchor="w")
         ttk.Label(body, text=reason + "\n\nMake a backup now so you can undo this edit if "
                   "something goes wrong?", wraplength=440, justify="left").pack(anchor="w", pady=(8, 0))
         result = {"choice": None}
@@ -1711,7 +1947,8 @@ class Editor(tk.Tk):
         return result["choice"]
 
     def center(self, win):
-        """Place a pop-up window in the middle of the editor window."""
+        """Place a pop-up window in the middle of the editor window (and theme it)."""
+        self.theme_window(win)
         win.update_idletasks()
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
         if win.winfo_width() > 1:
