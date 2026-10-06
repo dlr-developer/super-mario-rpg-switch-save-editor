@@ -10,7 +10,7 @@ cheats/
 └── 0100BC0018138000 - Super Mario RPG/
     └── v1.0.0 - E968832CADE2AD7C/
         ├── E968832CADE2AD7C.txt   ← all cheats for this version (Atmosphère format)
-        ├── info.json              ← what each cheat does, who made it, where it was tested
+        ├── info.json              ← what each cheat does and where it was tested
         └── README.md              ← a readable table of the above
 ```
 
@@ -29,4 +29,4 @@ cheats/
 
 ## Adding cheats
 
-Cheats you add in the editor are filed here automatically, in the right version folder, along with their descriptions and test results. To share them, commit the folder or open a pull request. Please fill in **What it does** and **Tested on** for every cheat.
+Every known game version already has a folder here, even before it has any cheats. Cheats you add in the editor are filed in the right version folder automatically, along with their descriptions and test results. To share them, commit the folder or open a pull request. Please fill in **What it does** and **Tested on** for every cheat.

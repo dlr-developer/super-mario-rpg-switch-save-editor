@@ -487,44 +487,62 @@ def read_library(bid):
     for c in cheats:
         d = details.get(c["name"], {})
         c["description"] = d.get("description", "")
-        c["author"] = d.get("author", "")
         c["tested"] = {t: d.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}
     return cheats
 
 
 def write_library(bid, cheats):
-    """Write a build's folder: <build ID>.txt (ready for any emulator), info.json, README.md."""
+    """Write a build's folder: <build ID>.txt (ready for any emulator), info.json, README.md.
+
+    Known game versions always keep their folder (with a "no cheats yet" README) so the library
+    shows every version; folders for hand-entered build IDs are removed once they're empty."""
     folder = build_folder(bid)
+    version = KNOWN_BUILDS.get(bid, "unknown version")
     if not cheats:
         for f in (bid + ".txt", "info.json", "README.md"):
             if os.path.exists(os.path.join(folder, f)):
                 os.remove(os.path.join(folder, f))
-        if os.path.isdir(folder) and not os.listdir(folder):
-            os.rmdir(folder)
-        return
+        if bid not in KNOWN_BUILDS:
+            if os.path.isdir(folder) and not os.listdir(folder):
+                os.rmdir(folder)
+            return
     os.makedirs(folder, exist_ok=True)
+    header = f"# Super Mario RPG {version} cheats\n\nBuild ID `{bid}` · title ID `{TITLE_ID}`\n\n"
+    if not cheats:
+        with open(os.path.join(folder, "README.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write(header + "No cheats for this version yet. Add some on the editor's **Cheats** tab and "
+                    "they'll be filed here automatically. See the [cheat guide](../../../docs/CHEATS.md).\n")
+        return
     with open(os.path.join(folder, bid + ".txt"), "w", encoding="utf-8", newline="\n") as f:
         f.write(format_cheats(cheats))
-    version = KNOWN_BUILDS.get(bid, "unknown version")
     info = {"game": "Super Mario RPG", "title_id": TITLE_ID, "version": version, "build_id": bid,
-            "cheats": [{"name": c["name"], "description": c.get("description", ""), "author": c.get("author", ""),
+            "cheats": [{"name": c["name"], "description": c.get("description", ""),
                         "master": bool(c.get("master")),
                         "tested": {t: c.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}}
                        for c in cheats]}
     with open(os.path.join(folder, "info.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump(info, f, indent=2, ensure_ascii=False)
-    rows = ["| Cheat | What it does | " + " | ".join(TEST_TARGETS) + " | Author |",
-            "|---|---|" + "---|" * len(TEST_TARGETS) + "---|"]
+    rows = ["| Cheat | What it does | " + " | ".join(TEST_TARGETS) + " |",
+            "|---|---|" + "---|" * len(TEST_TARGETS)]
     for c in cheats:
         name = c["name"] + (" *(master code)*" if c.get("master") else "")
         tested = " | ".join(TEST_ICONS[c.get("tested", {}).get(t, "Untested")] for t in TEST_TARGETS)
-        rows.append(f"| {name} | {c.get('description', '') or '—'} | {tested} | {c.get('author', '') or '—'} |")
+        rows.append(f"| {name} | {c.get('description', '') or '—'} | {tested} |")
     with open(os.path.join(folder, "README.md"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(f"# Super Mario RPG {version} cheats\n\nBuild ID `{bid}` · title ID `{TITLE_ID}`\n\n"
-                + "\n".join(rows) + "\n\n✅ works · ❌ doesn't work · ❔ untested\n\n"
+        f.write(header + "\n".join(rows) + "\n\n✅ works · ❌ doesn't work · ❔ untested\n\n"
                 "Install with the editor's **Cheats** tab (**Import cheat file…** and pick "
                 f"`{bid}.txt`), or copy `{bid}.txt` into your emulator's cheat folder. "
                 "See the [cheat guide](../../../docs/CHEATS.md).\n")
+
+
+def ensure_known_folders():
+    """Create a folder for every known game version, so the library lists them all."""
+    for bid in KNOWN_BUILDS:
+        if bid not in library_builds():
+            try:
+                write_library(bid, [])
+            except OSError:
+                pass
 
 
 def emulator_for(save_folder):
@@ -1720,7 +1738,7 @@ class Editor(tk.Tk):
             for bid, cheats in data.items():
                 have = {c["name"]: c for c in read_library(bid)}
                 for c in cheats:
-                    have.setdefault(c["name"], dict(c, description="", author="",
+                    have.setdefault(c["name"], dict(c, description="",
                                                     tested={t: "Untested" for t in TEST_TARGETS}))
                 write_library(bid, list(have.values()))
                 on = self.settings.setdefault("cheats_on", {}).setdefault(bid, [])
@@ -1747,6 +1765,7 @@ class Editor(tk.Tk):
         return bid if re.fullmatch(r"[0-9A-F]{16}", bid) else ""
 
     def detect_cheat_target(self):
+        ensure_known_folders()
         self.emulator = emulator_for(self.root_dir.get())
         found = detect_build_ids(self.emulator)
         known = [b for b in found if b in KNOWN_BUILDS] + [b for b in found if b not in KNOWN_BUILDS]
@@ -1844,7 +1863,6 @@ class Editor(tk.Tk):
         for c in new:
             c.setdefault("on", False)
             c.setdefault("description", "")
-            c.setdefault("author", "")
             c.setdefault("tested", {t: "Untested" for t in TEST_TARGETS})
             if c["name"] in names:
                 self.cheats[names[c["name"]]] = c
@@ -1883,7 +1901,7 @@ class Editor(tk.Tk):
                 details = {c["name"]: c for c in json.load(open(info, encoding="utf-8")).get("cheats", [])}
                 for c in new:
                     d = details.get(c["name"], {})
-                    c["description"], c["author"] = d.get("description", ""), d.get("author", "")
+                    c["description"] = d.get("description", "")
                     c["tested"] = {t: d.get("tested", {}).get(t, "Untested") for t in TEST_TARGETS}
             except (OSError, ValueError, KeyError):
                 pass
@@ -1900,7 +1918,7 @@ class Editor(tk.Tk):
         body.pack(fill="both", expand=True)
         cheat = cheat or {}
         fields = {}
-        for key, label in (("name", "Name"), ("description", "What it does"), ("author", "Author (optional)")):
+        for key, label in (("name", "Name"), ("description", "What it does")):
             ttk.Label(body, text=label).pack(anchor="w", pady=(6, 0) if key != "name" else 0)
             fields[key] = tk.StringVar(value=cheat.get(key, ""))
             ttk.Entry(body, textvariable=fields[key], width=70).pack(anchor="w", fill="x")
@@ -1934,7 +1952,6 @@ class Editor(tk.Tk):
                 return
             result["cheat"] = {"name": label, "lines": parsed[0]["lines"], "master": master.get(),
                                "description": fields["description"].get().strip(),
-                               "author": fields["author"].get().strip(),
                                "tested": {t: v.get() for t, v in tested.items()},
                                "on": bool(cheat.get("on")) if cheat else master.get()}
             win.destroy()
