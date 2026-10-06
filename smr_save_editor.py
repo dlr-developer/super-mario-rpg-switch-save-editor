@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tkinter as tk
+import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
@@ -109,6 +110,8 @@ def _gear():
 
 GEAR = _gear()
 EQUIP_IDS = sorted(GEAR)
+KEY_IDS = [i for i in range(131, len(ITEM_NAMES)) if i not in GEAR and ITEM_NAMES[i] != "(unused)"]
+SHARED_MAX = 5    # most copies allowed of gear that every character can wear
 
 GENERAL_FIELDS = [
     ("_coin", "Coins", 0, 9999),
@@ -121,7 +124,7 @@ GENERAL_FIELDS = [
 
 CHAR_FIELDS = [
     ("_level", "Level", 1, 30),
-    ("_experience", "Experience", 0, 9999999),
+    ("_experience", "Experience", 0, 9999),     # 9,999 EXP = level 30, the cap
     ("_hp", "HP (current)", 0, 999),
     ("_hp_max", "HP (max)", 1, 999),
     ("_speed", "Speed", 0, 255),
@@ -137,14 +140,9 @@ FIELD_ONLY = (99, 100, 101)   # Flower Tab/Jar/Box raise max FP; not in the batt
 
 
 def is_recovery(i):
-    """The game files 87–101 and 126–130 under Recovery, everything else under Battle."""
-    return 87 <= i <= 101 or 126 <= i <= 130
-
-
-def menu_label(i):
-    if i in FIELD_ONLY:
-        return "Recovery (menu only)"
-    return "Recovery" if is_recovery(i) else "Battle"
+    """Default menu for an item the save hasn't filed yet: 87–101 and 127–130 are Recovery
+    items, everything else (including Lucky Jewel, 126) is a Battle item."""
+    return 87 <= i <= 101 or 127 <= i <= 130
 
 
 def item_name(i):
@@ -346,14 +344,111 @@ def describe_changes(old, new):
         a, b = before.get(i, 0), after.get(i, 0)
         if a != b:
             out.append(("Equipment bag", f"{item_name(i)}: {a} → {b}"))
+    ko = {i for i in oi["_important_item_list"] if i}
+    kn = {i for i in ni["_important_item_list"] if i}
+    for i in sorted(ko ^ kn):
+        out.append(("Key items", f"{item_name(i)}: {'added' if i in kn else 'removed'}"))
     return out
+
+
+
+# ---------- cheats (Atmosphère cheat format, used by Ryujinx, the yuzu family and Atmosphère) ----------
+CHEAT_MOD_NAME = "SMR Save Editor Cheats"      # our own mod folder, so we never touch other cheat files
+CHEATS_URL = "https://www.cheatslips.com/game/super-mario-rpg"
+CHEAT_LINE = re.compile(r"^[0-9A-Fa-f]{8}( [0-9A-Fa-f]{8})*$")
+KNOWN_BUILDS = {"E968832CADE2AD7C": "v1.0.0"}
+
+
+def parse_cheats(text):
+    """Split an Atmosphère cheat file into [{name, lines, master}]. Raises ValueError if malformed."""
+    cheats, current = [], None
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line:
+            continue
+        if line[0] in "[{":
+            close = "]" if line[0] == "[" else "}"
+            if not line.endswith(close) or len(line) < 3:
+                raise ValueError(f"Line {n}: a cheat name must look like [Name].")
+            current = {"name": line[1:-1].strip(), "lines": [], "master": line[0] == "{"}
+            cheats.append(current)
+        else:
+            if current is None:
+                raise ValueError(f"Line {n}: code found before any [Cheat name].")
+            words = line.split()
+            if not CHEAT_LINE.match(" ".join(words)):
+                raise ValueError(f"Line {n}: '{line}' isn't a cheat code line (groups of 8 hex digits).")
+            current["lines"].append(" ".join(w.upper() for w in words))
+    empty = [c["name"] for c in cheats if not c["lines"]]
+    if empty:
+        raise ValueError(f"These cheats have no code: {', '.join(empty)}")
+    return cheats
+
+
+def format_cheats(cheats):
+    out = []
+    for c in cheats:
+        out.append(("{%s}" if c.get("master") else "[%s]") % c["name"])
+        out.extend(c["lines"])
+        out.append("")
+    return "\n".join(out)
+
+
+def emulator_for(save_folder):
+    """Work out which emulator a save folder belongs to, and where its cheats go.
+
+    Returns {name, root, cheat_dir, enabled_file, logs} or None for a plain folder (e.g. a
+    save dumped from a Switch)."""
+    if not save_folder:
+        return None
+    parts = os.path.normpath(save_folder).split(os.sep)
+    low = [p.lower() for p in parts]
+    for i in range(len(low) - 2):
+        if low[i:i + 3] == ["bis", "user", "save"]:            # Ryujinx (installed or portable)
+            root = os.sep.join(parts[:i]) or os.sep
+            title_dir = os.path.join(root, "mods", "contents", TITLE_ID.lower())
+            return {"name": "Ryujinx", "root": root,
+                    "cheat_dir": os.path.join(title_dir, CHEAT_MOD_NAME, "cheats"),
+                    "enabled_file": os.path.join(title_dir, "cheats", "enabled.txt"),
+                    "logs": [os.path.join(root, "Logs"), os.path.join(os.environ.get("APPDATA", ""), "Ryujinx", "Logs")]}
+        if low[i:i + 3] == ["nand", "user", "save"]:           # yuzu, suyu, sudachi, citron, eden, torzu
+            root = os.sep.join(parts[:i]) or os.sep
+            return {"name": os.path.basename(root) or "yuzu-based emulator", "root": root,
+                    "cheat_dir": os.path.join(root, "load", TITLE_ID, CHEAT_MOD_NAME, "cheats"),
+                    "enabled_file": None, "logs": [os.path.join(root, "log")]}
+    return None
+
+
+def detect_build_ids(emulator):
+    """Build IDs the emulator logged for this game, newest log first (Ryujinx logs them)."""
+    found = []
+    for folder in (emulator or {}).get("logs", []):
+        logs = sorted(glob.glob(os.path.join(glob.escape(folder), "*.log")), key=os.path.getmtime, reverse=True)
+        for path in logs[:10]:
+            try:
+                lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
+            except OSError:
+                continue
+            for n, line in enumerate(lines):
+                if "Build ids found for application" in line and TITLE_ID in line.upper():
+                    for nxt in lines[n + 1:n + 8]:
+                        token = nxt.strip()
+                        if re.fullmatch(r"[0-9A-Fa-f]{16,64}", token):
+                            bid = token[:16].upper()
+                            if bid not in found:
+                                found.append(bid)
+                        else:
+                            break
+            if found:
+                return found
+    return found
 
 
 class Editor(tk.Tk):
     def __init__(self, folder=None):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("960x660")
+        self.geometry("960x740")
         self.minsize(820, 560)
         self.settings = load_settings()
         self.root_dir = tk.StringVar()
@@ -365,9 +460,16 @@ class Editor(tk.Tk):
         self.char_vars = {}
         self.gear_vars = {}
         self.items = {}     # consumable id -> number carried
+        self.order = []     # item IDs in the order the game stored them
+        self.known_recovery, self.known_battle = set(), set()
         self.storage = []   # per-ID counts in the Storage Box
         self.equipment = []
+        self.key_items = []
+        self._key_warned = False
 
+        self._sort = {}          # tree -> (column, descending)
+        self.cheats, self.emulator = [], None
+        self.load_cheat_library()
         self._style()
         self._build_top()
         self._build_tabs()
@@ -429,11 +531,16 @@ class Editor(tk.Tk):
             ttk.Label(gen, text=label).grid(row=r, column=0, sticky="w", pady=3)
             v = tk.StringVar()
             ttk.Spinbox(gen, from_=lo, to=hi, textvariable=v, width=14).grid(row=r, column=1, sticky="w", padx=8)
-            ttk.Label(gen, text=f"({lo}–{hi})", foreground="#888").grid(row=r, column=2, sticky="w")
+            if key != "_play_time":
+                ttk.Button(gen, text="Max", width=6, command=lambda k=key: self.max_general(k)).grid(
+                    row=r, column=2, sticky="w")
+            ttk.Label(gen, text=f"({lo}–{hi})", foreground="#888").grid(row=r, column=3, sticky="w", padx=(8, 0))
             self.general_vars[key] = (v, lo, hi)
+        ttk.Button(gen, text="Max all", command=self.max_general).grid(
+            row=len(GENERAL_FIELDS), column=1, sticky="w", padx=8, pady=(8, 0))
         self.info = tk.StringVar()
         ttk.Label(gen, textvariable=self.info, foreground="#555", justify="left").grid(
-            row=len(GENERAL_FIELDS), column=0, columnspan=3, sticky="w", pady=(16, 0))
+            row=len(GENERAL_FIELDS) + 1, column=0, columnspan=4, sticky="w", pady=(16, 0))
 
         # Characters
         ch = ttk.Frame(nb, padding=12)
@@ -443,6 +550,12 @@ class Editor(tk.Tk):
         self.char_box = ttk.Combobox(ch, textvariable=self.char_sel, state="readonly", width=16)
         self.char_box.grid(row=0, column=1, sticky="w", padx=8)
         self.char_box.bind("<<ComboboxSelected>>", lambda e: self.show_char())
+        mx = ttk.Frame(ch)
+        mx.grid(row=0, column=3, sticky="w", padx=(24, 0))
+        self.max_char_btn = ttk.Button(mx, text="Max out character", command=self.max_character)
+        self.max_char_btn.pack(side="left")
+        ttk.Button(mx, text="Max out all characters", command=lambda: self.max_character(everyone=True)).pack(
+            side="left", padx=6)
         self._char_index = None
         for r, (key, label, lo, hi) in enumerate(CHAR_FIELDS, start=1):
             ttk.Label(ch, text=label).grid(row=r, column=0, sticky="w", pady=3)
@@ -469,7 +582,8 @@ class Editor(tk.Tk):
         ttk.Label(ch, foreground="#555", wraplength=820, text=(
             "Only gear that character can wear is listed. Gear you don't own is added to your bag "
             "automatically. Stat changes and gear changes also update the 'with equipment' totals "
-            "the menu shows. Switching characters keeps your unsaved edits.")).grid(
+            "the menu shows. Switching characters keeps your unsaved edits. Max out sets level, EXP, "
+            "HP and every stat to the highest value shown.")).grid(
             row=len(CHAR_FIELDS) + 1, column=0, columnspan=4, sticky="w", pady=(12, 0))
 
         # Items
@@ -492,57 +606,136 @@ class Editor(tk.Tk):
         ttk.Spinbox(it, from_=0, to=STORAGE_MAX, textvariable=self.item_box, width=8).grid(row=2, column=2, sticky="w", padx=4)
         ttk.Button(it, text="Set", command=self.set_item).grid(row=2, column=3, padx=4)
         ttk.Button(it, text=f"Max carried ({CARRY_MAX})", command=self.max_items).grid(row=2, column=4)
+
+        bulk = ttk.LabelFrame(it, text="Selected items", padding=8)
+        bulk.grid(row=3, column=0, columnspan=6, sticky="ew", pady=(10, 0))
+        ttk.Button(bulk, text="Select all", command=self.select_all_items).grid(row=0, column=0)
+        ttk.Button(bulk, text="Clear", command=lambda: self.tree.selection_set(())).grid(row=0, column=1, padx=4)
+        self.sel_count = tk.StringVar(value="0 selected")
+        ttk.Label(bulk, textvariable=self.sel_count, width=12).grid(row=0, column=2, padx=(4, 12))
+        ttk.Label(bulk, text="Set carried to").grid(row=0, column=3)
+        self.bulk_qty = tk.StringVar(value=str(CARRY_MAX))
+        ttk.Spinbox(bulk, from_=0, to=CARRY_MAX, textvariable=self.bulk_qty, width=6).grid(row=0, column=4, padx=4)
+        ttk.Button(bulk, text="Apply", command=lambda: self.bulk_set("carried")).grid(row=0, column=5)
+        ttk.Label(bulk, text="Set Storage Box to").grid(row=0, column=6, padx=(16, 0))
+        self.bulk_box = tk.StringVar(value="0")
+        ttk.Spinbox(bulk, from_=0, to=STORAGE_MAX, textvariable=self.bulk_box, width=6).grid(row=0, column=7, padx=4)
+        ttk.Button(bulk, text="Apply", command=lambda: self.bulk_set("storage")).grid(row=0, column=8)
+        self.show_all_items = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bulk, text="Show all items, including ones you don't have", variable=self.show_all_items,
+                        command=self.refresh_items).grid(row=1, column=0, columnspan=9, sticky="w", pady=(6, 0))
+
         ttk.Label(it, foreground="#555", wraplength=820, text=(
-            f"Pick a row (or choose any item from the list), set how many you carry and how many "
-            f"are in the Storage Box at Mario's Pad, then click Set. You can carry up to "
-            f"{CARRY_MAX} of each item. Anything over that belongs in the Storage Box.")).grid(
-            row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
+            f"Click a row to edit one item, or Ctrl/Shift-click (or Select all) to change many at "
+            f"once. You can carry up to {CARRY_MAX} of each item. Anything over that belongs in "
+            f"the Storage Box at Mario's Pad.")).grid(row=4, column=0, columnspan=6, sticky="w", pady=(8, 0))
 
         # Equipment bag & key items
         eq = ttk.Frame(nb, padding=12)
         nb.add(eq, text="Equipment Bag & Key Items")
         self.eq_tree = self._make_tree(eq, (("id", "ID", 45), ("name", "Item", 170), ("type", "Type", 90),
-                                            ("who", "Who can equip", 200), ("worn", "Equipped by", 120)))
+                                            ("who", "Who can equip", 170), ("owned", "Owned", 70),
+                                            ("worn", "Equipped by", 170)))
         self.eq_tree.bind("<<TreeviewSelect>>", self.on_equipment_select)
         self.eq_tree.tag_configure("worn", foreground="#0b5cad")
-        self.eq_tree.tag_configure("key", foreground="#777")
-        self._eq_rows = {}
+        self.eq_tree.tag_configure("key", foreground="#6a4c93")
+        self.eq_tree.tag_configure("none", foreground="#999")
 
         sel = ttk.LabelFrame(eq, text="Selected item", padding=8)
         sel.grid(row=1, column=0, columnspan=6, sticky="ew", pady=(10, 0))
-        self.eq_selected = tk.StringVar(value="Pick a row above.")
-        ttk.Label(sel, textvariable=self.eq_selected, width=34).grid(row=0, column=0, sticky="w")
+        self.eq_selected = tk.StringVar(value="Pick one row to equip or unequip it.")
+        ttk.Label(sel, textvariable=self.eq_selected, width=30).grid(row=0, column=0, sticky="w")
         ttk.Label(sel, text="Equip on:").grid(row=0, column=1, sticky="e", padx=(8, 4))
         self.equip_on = tk.StringVar()
-        self.equip_on_box = ttk.Combobox(sel, textvariable=self.equip_on, state="readonly", width=24)
+        self.equip_on_box = ttk.Combobox(sel, textvariable=self.equip_on, state="readonly", width=22)
         self.equip_on_box.grid(row=0, column=2, sticky="w")
         ttk.Button(sel, text="Equip", command=self.equip_selected).grid(row=0, column=3, padx=4)
-        ttk.Button(sel, text="Unequip", command=self.unequip_selected).grid(row=0, column=4)
-        ttk.Button(sel, text="Remove from bag", command=self.remove_equipment).grid(row=0, column=5, padx=(12, 0))
+        ttk.Label(sel, text="Unequip from:").grid(row=0, column=4, sticky="e", padx=(12, 4))
+        self.unequip_from = tk.StringVar()
+        self.unequip_box = ttk.Combobox(sel, textvariable=self.unequip_from, state="readonly", width=12)
+        self.unequip_box.grid(row=0, column=5, sticky="w")
+        ttk.Button(sel, text="Unequip", command=self.unequip_selected).grid(row=0, column=6, padx=4)
 
-        add = ttk.Frame(eq)
-        add.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
-        ttk.Label(add, text="Add equipment to bag:").pack(side="left")
-        self.eq_pick = tk.StringVar()
-        ttk.Combobox(add, textvariable=self.eq_pick, state="readonly", width=60,
-                     values=[gear_label(i) for i in EQUIP_IDS]).pack(side="left", padx=6)
-        ttk.Button(add, text="Add", command=self.add_equipment).pack(side="left")
+        bulk = ttk.LabelFrame(eq, text="Selected items", padding=8)
+        bulk.grid(row=2, column=0, columnspan=6, sticky="ew", pady=(8, 0))
+        ttk.Button(bulk, text="Select all", command=lambda: self.eq_tree.selection_set(
+            self.eq_tree.get_children())).grid(row=0, column=0)
+        ttk.Button(bulk, text="Clear", command=lambda: self.eq_tree.selection_set(())).grid(row=0, column=1, padx=4)
+        self.eq_count = tk.StringVar(value="0 selected")
+        ttk.Label(bulk, textvariable=self.eq_count, width=12).grid(row=0, column=2, padx=(4, 12))
+        ttk.Label(bulk, text="Set owned to").grid(row=0, column=3)
+        self.eq_qty = tk.StringVar(value="1")
+        ttk.Spinbox(bulk, from_=0, to=SHARED_MAX, textvariable=self.eq_qty, width=6).grid(row=0, column=4, padx=4)
+        ttk.Button(bulk, text="Apply", command=self.bulk_owned).grid(row=0, column=5)
+        ttk.Button(bulk, text="Max owned", command=lambda: self.bulk_owned(maximum=True)).grid(row=0, column=6, padx=(12, 0))
+        self.show_all_gear = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bulk, text="Show all equipment and key items, including ones you don't have",
+                        variable=self.show_all_gear, command=self.refresh_equipment).grid(
+            row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))
+
         ttk.Label(eq, foreground="#555", wraplength=820, text=(
-            "Pick a row to equip it on a character, unequip it, or remove a spare copy from the "
-            "bag. Equipping here also updates the Characters tab. Key items are view-only, "
-            "because changing them can break story progress.")).grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
+            f"Limits: 1 of each item only one character can wear (e.g. Hammer), up to {SHARED_MAX} of "
+            f"gear everyone can wear (e.g. Work Pants), and 1 of each key item. You can't own fewer "
+            "copies than are being worn. Equipping here also updates the Characters tab.")).grid(
+            row=3, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        # Cheats
+        ct = ttk.Frame(nb, padding=12)
+        nb.add(ct, text="Cheats")
+        top = ttk.LabelFrame(ct, text="Game & emulator", padding=8)
+        top.grid(row=0, column=0, columnspan=6, sticky="ew")
+        self.cheat_target = tk.StringVar()
+        ttk.Label(top, textvariable=self.cheat_target, wraplength=820, justify="left").grid(
+            row=0, column=0, columnspan=5, sticky="w")
+        ttk.Label(top, text="Game build ID:").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.build_id = tk.StringVar()
+        self.build_box = ttk.Combobox(top, textvariable=self.build_id, width=22)
+        self.build_box.grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
+        self.build_box.bind("<<ComboboxSelected>>", lambda e: self.load_cheats())
+        self.build_box.bind("<FocusOut>", lambda e: self.load_cheats())
+        self.build_note = tk.StringVar()
+        ttk.Label(top, textvariable=self.build_note, foreground="#555").grid(row=1, column=2, sticky="w", padx=6, pady=(6, 0))
+        ttk.Button(top, text="Detect again", command=self.detect_cheat_target).grid(row=1, column=3, padx=4, pady=(6, 0))
+
+        self.cheat_tree = self._make_tree(ct, (("on", "On", 50), ("name", "Cheat", 330), ("kind", "Type", 110),
+                                               ("lines", "Code lines", 90), ("installed", "In emulator", 110)),
+                                          row=1, height=9)
+        self.cheat_tree.tag_configure("on", foreground="#2e7d32")
+        self.cheat_tree.tag_configure("off", foreground="#888")
+        self.cheat_tree.bind("<Double-1>", lambda e: self.toggle_cheats())
+
+        acts = ttk.Frame(ct)
+        acts.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        for text, cmd in (("Turn on/off", self.toggle_cheats), ("Add cheat…", self.add_cheat),
+                          ("Import cheat file…", self.import_cheats), ("Edit…", self.edit_cheat),
+                          ("Delete", self.delete_cheats), ("Select all", lambda: self.cheat_tree.selection_set(
+                              self.cheat_tree.get_children()))):
+            ttk.Button(acts, text=text, command=cmd).pack(side="left", padx=(0, 4))
+
+        inst = ttk.Frame(ct)
+        inst.grid(row=3, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        self.primary_button(inst, "Install to emulator", self.install_cheats).pack(side="left")
+        ttk.Button(inst, text="Remove from emulator", command=self.uninstall_cheats).pack(side="left", padx=6)
+        ttk.Button(inst, text="Export for Switch (SD card)…", command=self.export_cheats).pack(side="left")
+        ttk.Button(inst, text="Find cheats online", command=lambda: webbrowser.open(CHEATS_URL)).pack(side="left", padx=6)
+        ttk.Label(ct, foreground="#555", wraplength=820, justify="left", text=(
+            "Cheats change the game while it runs. They aren't saved in your save file. Add or import "
+            "codes in Atmosphère format ([Cheat name] followed by lines of 8-digit hex codes), turn on the "
+            "ones you want, then click Install to emulator and restart the game. Codes only work for "
+            "the game version they were made for, so check the build ID. Your cheat list is kept by "
+            "this app, so it's safe to remove cheats from the emulator and install them again later.")).grid(
+            row=4, column=0, columnspan=6, sticky="w", pady=(10, 0))
         nb.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
-    def _make_tree(self, parent, cols):
-        tree = ttk.Treeview(parent, columns=[c[0] for c in cols], show="headings", height=12)
+    def _make_tree(self, parent, cols, row=0, height=12):
+        tree = ttk.Treeview(parent, columns=[c[0] for c in cols], show="headings", height=height)
         for col, txt, w in cols:
-            tree.heading(col, text=txt)
+            tree.heading(col, text=txt, command=lambda c=col: self.sort_by(tree, c))
             tree.column(col, width=w, anchor="w")
-        tree.grid(row=0, column=0, columnspan=6, sticky="nsew")
+        tree.grid(row=row, column=0, columnspan=6, sticky="nsew", pady=(8, 0) if row else 0)
         sb = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
-        sb.grid(row=0, column=6, sticky="ns")
+        sb.grid(row=row, column=6, sticky="ns", pady=(8, 0) if row else 0)
         tree.configure(yscrollcommand=sb.set)
-        parent.rowconfigure(0, weight=1)
+        parent.rowconfigure(row, weight=1)
         parent.columnconfigure(5, weight=1)
         return tree
 
@@ -553,6 +746,7 @@ class Editor(tk.Tk):
             self.settings["save_folder"] = folder
             store_settings(self.settings)
         self.refresh_slots()
+        self.detect_cheat_target()
 
     def browse(self):
         d = filedialog.askdirectory(initialdir=self.root_dir.get() or os.path.expanduser("~"),
@@ -640,9 +834,13 @@ class Editor(tk.Tk):
 
         im = d["_item_manager"]
         self.items = ordered_counts(im["_item_list"])
+        self.order = list(self.items)
+        self.known_recovery = set(ordered_counts(im["_normal_menu_heal_item_list"]))
+        self.known_battle = set(ordered_counts(im["_normal_menu_battle_item_list"]))
         self.storage = list(im["_storage_box_list"])
         self.equipment = [i for i in im["_equipment_item_list"] if i]
-        self.refresh_items()
+        self.key_items = [i for i in im["_important_item_list"] if i]
+        self.refresh_items(keep=())
         self.refresh_equipment()
         self.status.set(f"Loaded {name}. Close the game/emulator before saving.")
 
@@ -669,6 +867,7 @@ class Editor(tk.Tk):
             return
         self._char_index = int(self.char_sel.get().split(":")[0])
         p = self.chars[self._char_index]
+        self.max_char_btn.configure(text=f"Max out {p['_name']}")
         cid = p.get("_id", self._char_index)
         for key, (v, _, _) in self.char_vars.items():
             v.set(str(p.get(key, 0)))
@@ -697,6 +896,30 @@ class Editor(tk.Tk):
         self.totals.set("With equipment:  " + "   ".join(
             f"{n} {t.get('_equip' + k, '?')}" for n, k in zip(("Atk", "Def", "MgAtk", "MgDef", "Spd"), STAT_KEYS)))
 
+    def max_general(self, key=None):
+        """Set one General field (or all of them except play time) to its maximum."""
+        for k, (v, lo, hi) in self.general_vars.items():
+            if (key is None and k != "_play_time") or k == key:
+                v.set(str(hi))
+        fp_max = self.general_vars["_max_flower_point"][0].get()
+        if key in (None, "_current_flower_point"):
+            self.general_vars["_current_flower_point"][0].set(fp_max)   # current FP can't exceed max
+
+    def max_character(self, everyone=False):
+        """Max out level, EXP, HP and stats for the shown character, or for everyone."""
+        if not self.data or not self.store_char():
+            return
+        targets = [n for n, p in enumerate(self.chars) if p.get("_name")] if everyone else [self._char_index]
+        for n in targets:
+            for key, _, lo, hi in CHAR_FIELDS:
+                self.chars[n][key] = hi
+        if self._char_index is not None:
+            for key, (v, _, _) in self.char_vars.items():
+                v.set(str(self.chars[self._char_index][key]))
+            self.update_totals()
+        who = "all characters" if everyone else self.chars[targets[0]]["_name"]
+        self.status.set(f"Maxed out {who} (not saved yet).")
+
     @staticmethod
     def gear_stats(p):
         total = [0] * 5
@@ -721,17 +944,74 @@ class Editor(tk.Tk):
     def stored(self, i):
         return self.storage[i] if 0 <= i < len(self.storage) else 0
 
-    def refresh_items(self):
+    def refresh_items(self, keep=None):
+        keep = set(self.tree.selection()) if keep is None else {str(i) for i in keep}
         self.tree.delete(*self.tree.get_children())
-        owned = set(self.items) | {i for i in CONSUMABLE_RANGE if self.stored(i)}
-        for i in sorted(owned):
+        if self.show_all_items.get():
+            shown = set(CONSUMABLE_RANGE)
+        else:
+            shown = set(self.items) | {i for i in CONSUMABLE_RANGE if self.stored(i)}
+        for i in sorted(shown):
             self.tree.insert("", "end", iid=str(i),
-                             values=(i, item_name(i), menu_label(i), self.items.get(i, 0), self.stored(i)))
+                             values=(i, item_name(i), self.menu_label(i), self.items.get(i, 0), self.stored(i)))
+        self.tree.selection_set([k for k in keep if self.tree.exists(k)])
+        self.apply_sort(self.tree)
+        self.on_item_select(None)
+
+    def recovery(self, i):
+        """Which menu an item is in: as the game filed it in this save, else the default."""
+        if i in self.known_recovery:
+            return True
+        if i in self.known_battle:
+            return False
+        return is_recovery(i)
+
+    def menu_label(self, i):
+        if i in FIELD_ONLY:
+            return "Recovery (menu only)"
+        return "Recovery" if self.recovery(i) else "Battle"
+
+    def item_order(self):
+        """Owned items in the game's own order (as stored in the save). New items go right
+        after the item with the next-lower ID; the game re-sorts them when it next saves."""
+        order = [i for i in self.order if i in self.items]
+        for i in sorted(set(self.items) - set(order)):
+            pos = max((n + 1 for n, j in enumerate(order) if j < i), default=0)
+            order.insert(pos, i)
+        return order
 
     def on_item_select(self, _):
         sel = self.tree.selection()
-        if sel:
+        self.sel_count.set(f"{len(sel)} selected")
+        if len(sel) == 1:
             self.show_item(int(sel[0]))
+
+    def select_all_items(self):
+        self.tree.selection_set(self.tree.get_children())
+
+    def bulk_set(self, what):
+        sel = [int(s) for s in self.tree.selection()]
+        if not sel:
+            messagebox.showinfo("Nothing selected", "Select one or more items first "
+                                "(Ctrl/Shift-click, or Select all).")
+            return
+        limit = CARRY_MAX if what == "carried" else STORAGE_MAX
+        try:
+            n = max(0, min(limit, int((self.bulk_qty if what == "carried" else self.bulk_box).get())))
+        except ValueError:
+            messagebox.showerror("Invalid", "The amount must be a number.")
+            return
+        for i in sel:
+            if what == "carried":
+                if n:
+                    self.items[i] = n
+                else:
+                    self.items.pop(i, None)
+            elif i < len(self.storage):
+                self.storage[i] = n
+        self.refresh_items(keep=sel)
+        label = "carried" if what == "carried" else "in the Storage Box"
+        self.status.set(f"Set {len(sel)} item{'s' if len(sel) != 1 else ''} to {n} {label} (not saved yet).")
 
     def on_pick(self, _):
         self.show_item(int(self.item_pick.get().split()[0]))
@@ -802,64 +1082,73 @@ class Editor(tk.Tk):
             self.store_char()          # pick up gear changed on the Characters tab
             self.refresh_equipment()
 
-    def refresh_equipment(self, select=None):
+    def max_owned(self, i):
+        """1 of each key item and character-only gear; up to SHARED_MAX of gear anyone wears."""
+        if i in GEAR and len(GEAR[i][1]) == len(ALL):
+            return SHARED_MAX
+        return 1
+
+    def owned(self, i):
+        return (1 if i in self.key_items else 0) if i in KEY_IDS else self.equipment.count(i)
+
+    def refresh_equipment(self, keep=None):
+        keep = set(self.eq_tree.selection()) if keep is None else {str(i) for i in keep}
         self.eq_tree.delete(*self.eq_tree.get_children())
-        self._eq_rows = {}
         wearers = {}
         for n, i in self.worn_gear():
-            wearers.setdefault(i, []).append(n)
-        shown = {}
+            wearers.setdefault(i, []).append(self.chars[n]["_name"])
         names = {1: "Mario", 2: "Mallow", 3: "Geno", 4: "Bowser", 5: "Peach"}
-        for row, i in enumerate(self.equipment):
-            slot, allowed, _ = GEAR.get(i, (None, (), None))
-            who = "Everyone" if len(allowed) == 5 else ", ".join(names[c] for c in allowed) or "?"
-            k = shown.get(i, 0)
-            wearer = wearers[i][k] if k < len(wearers.get(i, [])) else None
-            shown[i] = k + 1
-            iid = f"e{row}"
-            self._eq_rows[iid] = (i, wearer)
-            self.eq_tree.insert("", "end", iid=iid, tags=("worn",) if wearer is not None else (),
-                                values=(i, item_name(i), SLOT_LABELS.get(slot, "Equipment"), who,
-                                        self.chars[wearer]["_name"] if wearer is not None else "—"))
-        for row, i in enumerate(x for x in self.data["_item_manager"]["_important_item_list"] if x):
-            self.eq_tree.insert("", "end", iid=f"k{row}", tags=("key",),
-                                values=(i, item_name(i), "Key item", "—", "—"))
-        if select and select in self._eq_rows:
-            self.eq_tree.selection_set(select)
-            self.eq_tree.see(select)
-        else:
-            self.eq_selected.set("Pick a row above.")
-            self.equip_on_box["values"] = []
-            self.equip_on.set("")
-
-    def selected_gear(self):
-        sel = self.eq_tree.selection()
-        if not sel or sel[0] not in self._eq_rows:
-            return None, None, None
-        i, wearer = self._eq_rows[sel[0]]
-        return sel[0], i, wearer
+        everything = self.show_all_gear.get()
+        for i in EQUIP_IDS + KEY_IDS:
+            have = self.owned(i)
+            if not (everything or have or i in wearers):
+                continue
+            if i in KEY_IDS:
+                kind, who, tag = "Key item", "—", "key"
+            else:
+                slot, allowed, _ = GEAR[i]
+                kind = SLOT_LABELS[slot]
+                who = "Everyone" if len(allowed) == len(ALL) else ", ".join(names[c] for c in allowed)
+                tag = "worn" if i in wearers else "" if have else "none"
+            self.eq_tree.insert("", "end", iid=str(i), tags=(tag,) if tag else (),
+                                values=(i, item_name(i), kind, who, f"{have} / {self.max_owned(i)}",
+                                        ", ".join(wearers.get(i, [])) or "—"))
+        self.eq_tree.selection_set([k for k in keep if self.eq_tree.exists(k)])
+        self.apply_sort(self.eq_tree)
+        self.on_equipment_select(None)
 
     def on_equipment_select(self, _):
-        iid, i, wearer = self.selected_gear()
-        if iid is None:
-            self.eq_selected.set("Key items can't be equipped.")
-            self.equip_on_box["values"] = []
-            self.equip_on.set("")
+        sel = self.eq_tree.selection()
+        self.eq_count.set(f"{len(sel)} selected")
+        self.equip_on_box["values"] = []
+        self.unequip_box["values"] = []
+        self.equip_on.set("")
+        self.unequip_from.set("")
+        if len(sel) != 1:
+            self.eq_selected.set("Pick one row to equip or unequip it.")
             return
-        state = f"worn by {self.chars[wearer]['_name']}" if wearer is not None else "not equipped"
-        self.eq_selected.set(f"{item_name(i)}  ({state})")
+        i = int(sel[0])
+        if i in KEY_IDS:
+            self.eq_selected.set(f"{item_name(i)}  (key item)")
+            return
         slot = GEAR[i][0]
-        options = [f"{n}: {self.char_label(n)}" for n in self.can_wear(i)
-                   if self.chars[n].get(slot) != i]
+        worn_by = [n for n, j in self.worn_gear() if j == i]
+        spare = max(0, self.owned(i) - len(worn_by))
+        self.eq_selected.set(f"{item_name(i)}  ({spare} spare)")
+        options = [f"{n}: {self.char_label(n)}" for n in self.can_wear(i) if self.chars[n].get(slot) != i]
         self.equip_on_box["values"] = options
         self.equip_on.set(options[0] if options else "")
+        wearing = [f"{n}: {self.chars[n]['_name']}" for n in worn_by]
+        self.unequip_box["values"] = wearing
+        self.unequip_from.set(wearing[0] if wearing else "")
 
     def set_gear(self, n, slot, item):
         """Change one character's gear, keeping the bag and the Characters tab in sync."""
         p, orig = self.chars[n], self.orig_chars[n]
         old = p.get(slot, 0)
         # Starting gear of a character who hasn't joined isn't in the bag; keep it when removed.
-        if old and not self.joined(p) and old == orig.get(slot, 0):
+        if (old and not self.joined(p) and old == orig.get(slot, 0)
+                and self.owned(old) < self.max_owned(old)):
             self.equipment.append(old)
         p[slot] = item
         if n == self._char_index:
@@ -868,63 +1157,416 @@ class Editor(tk.Tk):
 
     def equip_selected(self):
         self.store_char()
-        iid, i, wearer = self.selected_gear()
-        if iid is None or not self.equip_on.get():
-            messagebox.showinfo("Equip", "Pick an item and a character to equip it on.")
+        sel = self.eq_tree.selection()
+        if len(sel) != 1 or not self.equip_on.get():
+            messagebox.showinfo("Equip", "Pick one piece of equipment and a character to equip it on.")
             return
-        n = int(self.equip_on.get().split(":")[0])
+        i, n = int(sel[0]), int(self.equip_on.get().split(":")[0])
         slot = GEAR[i][0]
-        if self.chars[n].get(slot) == i:
-            messagebox.showinfo("Equip", f"{self.chars[n]['_name']} is already wearing {item_name(i)}.")
-            return
-        spare = self.equipment.count(i) - self.equipped_ids().count(i)
-        if spare <= 0:
-            if wearer is None:
-                return
-            if not messagebox.askyesno("Take it from someone?", f"{self.chars[wearer]['_name']} is "
-                                       f"wearing your only {item_name(i)}. Move it to "
-                                       f"{self.chars[n]['_name']}?"):
-                return
-            self.set_gear(wearer, slot, 0)
+        worn_by = [w for w, j in self.worn_gear() if j == i]
+        if self.owned(i) - len(worn_by) <= 0:
+            if self.owned(i) < self.max_owned(i):
+                self.equipment.append(i)            # none spare: add a copy, within the limit
+            else:
+                w = worn_by[0]
+                if not messagebox.askyesno(
+                        "Take it from someone?",
+                        f"You already own the most {item_name(i)} allowed ({self.max_owned(i)}), and "
+                        f"{self.chars[w]['_name']} is wearing one. Move it to {self.chars[n]['_name']}?"):
+                    return
+                self.set_gear(w, slot, 0)
         self.set_gear(n, slot, i)
-        self.refresh_equipment(select=self.row_worn_by(i, n))
+        self.refresh_equipment(keep=[i])
         self.status.set(f"{self.chars[n]['_name']} now has {item_name(i)} equipped (not saved yet).")
 
     def unequip_selected(self):
         self.store_char()
-        iid, i, wearer = self.selected_gear()
-        if iid is None or wearer is None:
-            messagebox.showinfo("Unequip", "Pick an item that someone is wearing.")
+        sel = self.eq_tree.selection()
+        if len(sel) != 1 or not self.unequip_from.get():
+            messagebox.showinfo("Unequip", "Pick one item that someone is wearing.")
             return
-        name = self.chars[wearer]["_name"]
-        self.set_gear(wearer, GEAR[i][0], 0)
-        self.refresh_equipment(select=iid)
-        self.status.set(f"Unequipped {item_name(i)} from {name} (not saved yet).")
+        i, n = int(sel[0]), int(self.unequip_from.get().split(":")[0])
+        self.set_gear(n, GEAR[i][0], 0)
+        self.refresh_equipment(keep=[i])
+        self.status.set(f"Unequipped {item_name(i)} from {self.chars[n]['_name']} (not saved yet).")
 
-    def row_worn_by(self, i, n):
-        return next((iid for iid, (item, w) in self._eq_rows.items() if item == i and w == n), None)
+    def set_owned(self, i, n):
+        """Set how many of an item you own, within its limit and never below the number worn.
+        Returns the number actually set."""
+        n = max(0, min(self.max_owned(i), n))
+        if i in KEY_IDS:
+            if n and i not in self.key_items:
+                self.key_items.append(i)
+            elif not n and i in self.key_items:
+                self.key_items.remove(i)
+            return n
+        n = max(n, self.equipped_ids().count(i))
+        while self.equipment.count(i) < n:
+            self.equipment.append(i)
+        while self.equipment.count(i) > n:     # drop the last copies first
+            del self.equipment[len(self.equipment) - 1 - self.equipment[::-1].index(i)]
+        return n
 
-    def add_equipment(self):
-        if not self.eq_pick.get():
-            return
-        if len(self.equipment) >= len(self.data["_item_manager"]["_equipment_item_list"]):
-            messagebox.showerror("Full", "The equipment bag is full.")
-            return
-        self.equipment.append(int(self.eq_pick.get().split()[0]))
-        self.refresh_equipment()
-
-    def remove_equipment(self):
+    def bulk_owned(self, maximum=False):
         self.store_char()
-        sel = [s for s in self.eq_tree.selection() if s.startswith("e")]
+        sel = [int(s) for s in self.eq_tree.selection()]
+        if not sel:
+            messagebox.showinfo("Nothing selected", "Select one or more rows first "
+                                "(Ctrl/Shift-click, or Select all).")
+            return
+        try:
+            want = None if maximum else int(self.eq_qty.get())
+        except ValueError:
+            messagebox.showerror("Invalid", "The amount must be a number.")
+            return
+        key_target = 1 if maximum else min(1, max(0, want))
+        if not self._key_warned and any(i in KEY_IDS and self.owned(i) != key_target for i in sel):
+            if messagebox.askyesno("Change key items?", "Key items are tied to story progress. "
+                                   "Adding one early or removing one you still need can block the "
+                                   "story. Change key items anyway?"):
+                self._key_warned = True
+            else:
+                sel = [i for i in sel if i not in KEY_IDS]
+        limited = []
+        for i in sel:
+            target = self.max_owned(i) if maximum else want
+            got = self.set_owned(i, target)
+            if got != target:
+                limited.append(f"{item_name(i)}: {got}")
+        self.refresh_equipment(keep=sel)
+        self.status.set(f"Updated {len(sel)} item{'s' if len(sel) != 1 else ''} (not saved yet).")
+        if limited and not maximum:
+            messagebox.showinfo("Limits applied", "Some items were set to their limit, or to the "
+                                "number being worn:\n\n" + "\n".join(limited[:15]) +
+                                ("\n…" if len(limited) > 15 else ""))
+
+    # ---------- sorting ----------
+    def sort_by(self, tree, col):
+        """Click a column heading to sort by it; click again to reverse."""
+        current, reverse = self._sort.get(tree, (None, False))
+        self._sort[tree] = (col, not reverse if current == col else False)
+        self.apply_sort(tree)
+
+    def apply_sort(self, tree):
+        if tree not in self._sort:
+            return
+        col, reverse = self._sort[tree]
+
+        def key(iid):
+            value = str(tree.set(iid, col))
+            number = re.match(r"-?\d+", value)
+            if number:
+                return (0, int(number.group()), value.lower())
+            return (1 if value not in ("", "—") else 2, 0, value.lower())
+
+        rows = sorted(tree.get_children(), key=key, reverse=reverse)
+        if reverse:   # keep empty values last either way
+            rows = [r for r in rows if key(r)[0] != 2] + [r for r in rows if key(r)[0] == 2]
+        for n, iid in enumerate(rows):
+            tree.move(iid, "", n)
+        for c in tree["columns"]:
+            text = tree.heading(c, "text").rstrip(" ▲▼")
+            tree.heading(c, text=text + ((" ▼" if reverse else " ▲") if c == col else ""))
+
+    # ---------- cheats ----------
+    def cheats_file(self):
+        return os.path.join(os.path.dirname(SETTINGS_PATH), "cheats.json")
+
+    def load_cheat_library(self):
+        try:
+            with open(self.cheats_file(), encoding="utf-8") as f:
+                self.cheat_lib = json.load(f)
+        except (OSError, ValueError):
+            self.cheat_lib = {}
+
+    def store_cheat_library(self):
+        bid = self.current_build()
+        if bid:
+            self.cheat_lib[bid] = self.cheats
+        try:
+            os.makedirs(os.path.dirname(self.cheats_file()), exist_ok=True)
+            with open(self.cheats_file(), "w", encoding="utf-8") as f:
+                json.dump(self.cheat_lib, f, indent=2)
+        except OSError as e:
+            messagebox.showerror("Couldn't save cheat list", str(e))
+
+    def current_build(self):
+        bid = self.build_id.get().strip().upper()
+        return bid if re.fullmatch(r"[0-9A-F]{16}", bid) else ""
+
+    def detect_cheat_target(self):
+        self.emulator = emulator_for(self.root_dir.get())
+        found = detect_build_ids(self.emulator)
+        known = [b for b in found if b in KNOWN_BUILDS] + [b for b in found if b not in KNOWN_BUILDS]
+        stored = [b for b in self.cheat_lib if b not in known]
+        self.build_box["values"] = known + stored
+        if known:
+            self.build_id.set(known[0])
+        elif not self.current_build() and stored:
+            self.build_id.set(stored[0])
+        if self.emulator:
+            self.cheat_target.set(f"Emulator: {self.emulator['name']}   ·   cheats go in:\n"
+                                  f"{self.emulator['cheat_dir']}")
+        else:
+            self.cheat_target.set("This save isn't inside an emulator folder (for example, a save dumped "
+                                  "from a Switch). Use Export for Switch (SD card) to install cheats with "
+                                  "Atmosphère.")
+        self.load_cheats()
+
+    def load_cheats(self):
+        bid = self.current_build()
+        self.cheats = [dict(c) for c in self.cheat_lib.get(bid, [])] if bid else []
+        if not bid:
+            self.build_note.set("Enter the 16-character build ID (Ryujinx: right-click the game → Manage Cheats).")
+        elif bid in KNOWN_BUILDS:
+            self.build_note.set(f"Super Mario RPG {KNOWN_BUILDS[bid]}, found in your emulator's log")
+        elif bid in (self.build_box["values"] or ()):
+            self.build_note.set("Found in your emulator's log")
+        else:
+            self.build_note.set("Entered by hand")
+        self.refresh_cheats()
+
+    def installed_names(self):
+        bid, emu = self.current_build(), self.emulator
+        if not bid or not emu:
+            return set()
+        path = os.path.join(emu["cheat_dir"], bid + ".txt")
+        try:
+            return {c["name"] for c in parse_cheats(open(path, encoding="utf-8").read())}
+        except (OSError, ValueError):
+            return set()
+
+    def refresh_cheats(self, keep=None):
+        keep = set(self.cheat_tree.selection()) if keep is None else {str(k) for k in keep}
+        self.cheat_tree.delete(*self.cheat_tree.get_children())
+        installed = self.installed_names()
+        for n, c in enumerate(self.cheats):
+            self.cheat_tree.insert("", "end", iid=str(n), tags=("on" if c.get("on") else "off",), values=(
+                "✔" if c.get("on") else "", c["name"], "Master code" if c.get("master") else "Cheat",
+                len(c["lines"]), "Installed" if c["name"] in installed else "—"))
+        self.cheat_tree.selection_set([k for k in keep if self.cheat_tree.exists(k)])
+        self.apply_sort(self.cheat_tree)
+
+    def selected_cheats(self):
+        return sorted(int(s) for s in self.cheat_tree.selection())
+
+    def need_build(self):
+        if self.current_build():
+            return False
+        messagebox.showinfo("Build ID needed", "Enter your game's 16-character build ID first. Cheats only "
+                            "work for the exact game version they were made for.\n\nRyujinx shows it at the "
+                            "top of the Manage Cheats window (right-click the game).")
+        return True
+
+    def toggle_cheats(self):
+        sel = self.selected_cheats()
         if not sel:
             return
-        n = int(sel[0][1:])
-        i = self.equipment[n]
-        if self.equipment.count(i) <= self.equipped_ids().count(i):
-            messagebox.showerror("Equipped", f"{item_name(i)} is being worn. Unequip it first.")
+        turn_on = not all(self.cheats[n].get("on") for n in sel)
+        for n in sel:
+            self.cheats[n]["on"] = turn_on
+        self.store_cheat_library()
+        self.refresh_cheats(keep=sel)
+        self.status.set(f"Turned {'on' if turn_on else 'off'} {len(sel)} cheat{'s' if len(sel) != 1 else ''}. "
+                        "Click Install to emulator to apply.")
+
+    def add_cheats(self, new, source):
+        names = {c["name"]: n for n, c in enumerate(self.cheats)}
+        replaced = [c["name"] for c in new if c["name"] in names]
+        if replaced and not messagebox.askyesno("Replace cheats?", "You already have cheats with these "
+                                                "names:\n\n" + "\n".join(replaced[:12]) + "\n\nReplace them?"):
+            new = [c for c in new if c["name"] not in names]
+        for c in new:
+            c.setdefault("on", False)
+            if c["name"] in names:
+                self.cheats[names[c["name"]]] = c
+            else:
+                self.cheats.append(c)
+        self.store_cheat_library()
+        self.refresh_cheats()
+        self.status.set(f"Added {len(new)} cheat{'s' if len(new) != 1 else ''} from {source}. Turn on the "
+                        "ones you want, then Install to emulator.")
+
+    def import_cheats(self):
+        if self.need_build():
             return
-        del self.equipment[n]
-        self.refresh_equipment()
+        path = filedialog.askopenfilename(title="Import an Atmosphère cheat file",
+                                          filetypes=[("Cheat files", "*.txt"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            new = parse_cheats(open(path, encoding="utf-8-sig", errors="replace").read())
+        except (OSError, ValueError) as e:
+            messagebox.showerror("Can't import", str(e))
+            return
+        if not new:
+            messagebox.showinfo("No cheats", "That file doesn't contain any cheats.")
+            return
+        stem = os.path.splitext(os.path.basename(path))[0].upper()
+        if re.fullmatch(r"[0-9A-F]{16}", stem) and stem != self.current_build():
+            if not messagebox.askyesno("Different game version?", f"This file is named for build ID {stem}, "
+                                       f"but the build ID selected is {self.current_build()}. Cheats for a "
+                                       "different version usually don't work. Import anyway?"):
+                return
+        self.add_cheats(new, os.path.basename(path))
+
+    def cheat_dialog(self, cheat=None):
+        """Add/edit dialog. Returns the new cheat dict, or None if cancelled."""
+        win = tk.Toplevel(self)
+        win.title("Edit cheat" if cheat else "Add cheat")
+        win.geometry("560x420")
+        win.transient(self)
+        win.grab_set()
+        body = ttk.Frame(win, padding=12)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="Name").pack(anchor="w")
+        name = tk.StringVar(value=cheat["name"] if cheat else "")
+        ttk.Entry(body, textvariable=name, width=60).pack(anchor="w", fill="x")
+        master = tk.BooleanVar(value=bool(cheat and cheat.get("master")))
+        ttk.Checkbutton(body, text="Master code (needed by some cheats; always on)", variable=master).pack(
+            anchor="w", pady=(6, 0))
+        ttk.Label(body, text="Code (one instruction per line, 8-digit hex groups)").pack(anchor="w", pady=(8, 0))
+        code = tk.Text(body, height=12, font=("Consolas", 10), wrap="none")
+        code.pack(fill="both", expand=True)
+        if cheat:
+            code.insert("1.0", "\n".join(cheat["lines"]))
+        result = {}
+
+        def ok():
+            label = name.get().strip()
+            if not label or any(ch in label for ch in "[]{}"):
+                messagebox.showerror("Name needed", "Give the cheat a name (without [ ] or { }).", parent=win)
+                return
+            try:
+                parsed = parse_cheats(f"[{label}]\n" + code.get("1.0", "end"))
+            except ValueError as e:
+                messagebox.showerror("Invalid code", str(e).replace("Line ", "Code line ", 1), parent=win)
+                return
+            result["cheat"] = {"name": label, "lines": parsed[0]["lines"], "master": master.get(),
+                               "on": bool(cheat.get("on")) if cheat else master.get()}
+            win.destroy()
+
+        row = ttk.Frame(win, padding=(12, 0, 12, 12))
+        row.pack(fill="x")
+        ttk.Button(row, text="Cancel", command=win.destroy).pack(side="right")
+        self.primary_button(row, "Save cheat", ok).pack(side="right", padx=6)
+        self.center(win)
+        self.wait_window(win)
+        return result.get("cheat")
+
+    def add_cheat(self):
+        if self.need_build():
+            return
+        c = self.cheat_dialog()
+        if c:
+            self.add_cheats([c], "the editor")
+
+    def edit_cheat(self):
+        sel = self.selected_cheats()
+        if len(sel) != 1:
+            messagebox.showinfo("Edit", "Pick one cheat to edit.")
+            return
+        c = self.cheat_dialog(self.cheats[sel[0]])
+        if c:
+            self.cheats[sel[0]] = c
+            self.store_cheat_library()
+            self.refresh_cheats(keep=sel)
+
+    def delete_cheats(self):
+        sel = self.selected_cheats()
+        if not sel or not messagebox.askyesno("Delete cheats", f"Delete {len(sel)} cheat"
+                                              f"{'s' if len(sel) != 1 else ''} from your list?"):
+            return
+        self.cheats = [c for n, c in enumerate(self.cheats) if n not in sel]
+        self.store_cheat_library()
+        self.refresh_cheats(keep=())
+
+    def write_enabled_file(self, bid, on_names):
+        """Ryujinx turns cheats on from enabled.txt ("BUILDID-<Name Cheat>" per line). Keep any
+        lines that aren't ours."""
+        path = self.emulator.get("enabled_file")
+        if not path:
+            return
+        ours = {f"{bid}-<{c['name']} Cheat>" for c in self.cheats}
+        try:
+            lines = [l.strip() for l in open(path, encoding="utf-8").read().splitlines() if l.strip()]
+        except OSError:
+            lines = []
+        lines = [l for l in lines if l not in ours] + [f"{bid}-<{n} Cheat>" for n in on_names]
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(lines) + ("\n" if lines else ""))
+
+    def install_cheats(self):
+        if self.need_build():
+            return
+        if not self.emulator:
+            messagebox.showinfo("No emulator", "This save isn't inside an emulator folder. Use Export for "
+                                "Switch (SD card) instead.")
+            return
+        bid = self.current_build()
+        on = [c for c in self.cheats if c.get("on")]
+        path = os.path.join(self.emulator["cheat_dir"], bid + ".txt")
+        try:
+            if on:
+                os.makedirs(self.emulator["cheat_dir"], exist_ok=True)
+                # Ryujinx and the yuzu family read [Name] sections; master codes are just cheats there.
+                text = format_cheats([dict(c, master=False) for c in on])
+                with open(path, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(text)
+            elif os.path.exists(path):
+                os.remove(path)
+            self.write_enabled_file(bid, [c["name"] for c in on])
+        except OSError as e:
+            messagebox.showerror("Install failed", str(e))
+            return
+        self.refresh_cheats()
+        extra = ("" if self.emulator["enabled_file"] else "\n\nIn your emulator, make sure the "
+                 f"'{CHEAT_MOD_NAME}' add-on is enabled for Super Mario RPG.")
+        messagebox.showinfo("Cheats installed", f"{len(on)} cheat{'s' if len(on) != 1 else ''} installed "
+                            f"for {self.emulator['name']}.\n\nRestart the game for the changes to take "
+                            f"effect.{extra}")
+        self.status.set(f"Installed {len(on)} cheats to {self.emulator['cheat_dir']}")
+
+    def uninstall_cheats(self):
+        if not self.emulator or self.need_build():
+            return
+        bid = self.current_build()
+        path = os.path.join(self.emulator["cheat_dir"], bid + ".txt")
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            self.write_enabled_file(bid, [])
+        except OSError as e:
+            messagebox.showerror("Remove failed", str(e))
+            return
+        self.refresh_cheats()
+        self.status.set("Removed this app's cheats from the emulator. Your cheat list is kept.")
+
+    def export_cheats(self):
+        if self.need_build():
+            return
+        on = [c for c in self.cheats if c.get("on")]
+        if not on:
+            messagebox.showinfo("Nothing to export", "Turn on at least one cheat first.")
+            return
+        sd = filedialog.askdirectory(title="Pick your Switch SD card (or a folder to copy to it later)")
+        if not sd:
+            return
+        folder = os.path.join(sd, "atmosphere", "contents", TITLE_ID, "cheats")
+        path = os.path.join(folder, self.current_build() + ".txt")
+        if os.path.exists(path) and not messagebox.askyesno("Replace file?", f"{path}\nalready exists. Replace it?"):
+            return
+        try:
+            os.makedirs(folder, exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(format_cheats(on))
+        except OSError as e:
+            messagebox.showerror("Export failed", str(e))
+            return
+        messagebox.showinfo("Exported", f"Saved {len(on)} cheats to:\n{path}\n\nOn the Switch, Atmosphère "
+                            "loads them when the game starts. Use the cheat menu (e.g. EdiZon or Breeze) to "
+                            "turn individual cheats on or off.")
 
     # ---------- saving ----------
     def apply(self):
@@ -950,21 +1592,24 @@ class Editor(tk.Tk):
 
         im = d["_item_manager"]
         size = len(im["_item_list"])
-        # The game's menu order: Flower Tab/Jar/Box, other Recovery items, then Battle items.
-        order = sorted(self.items, key=lambda i: (i not in FIELD_ONLY, not is_recovery(i), i))
+        # One master order; each menu list is that order filtered to its own items.
+        order = self.item_order()
         expand = lambda keep: [i for i in order if keep(i) for _ in range(self.items[i])]
-        heal = expand(is_recovery)
-        battle = expand(lambda i: not is_recovery(i))
+        heal = expand(self.recovery)
+        battle = expand(lambda i: not self.recovery(i))
         if len(heal) + len(battle) > size:
             raise ValueError(f"Too many items in total (limit {size}).")
         if len(self.equipment) > len(im["_equipment_item_list"]):
             raise ValueError("Too many pieces of equipment.")
-        im["_item_list"] = pad(heal + battle, size)
+        im["_item_list"] = pad(expand(lambda i: True), size)
         im["_normal_menu_heal_item_list"] = pad(heal, size)
         im["_normal_menu_battle_item_list"] = pad(battle, size)
         im["_battle_menu_item_list"] = pad(expand(lambda i: i not in FIELD_ONLY), size)
         im["_storage_box_list"] = list(self.storage)
         im["_equipment_item_list"] = pad(self.equipment, len(im["_equipment_item_list"]))
+        if len(self.key_items) > len(im["_important_item_list"]):
+            raise ValueError("Too many key items.")
+        im["_important_item_list"] = pad(self.key_items, len(im["_important_item_list"]))
         # Per-ID totals of everything owned (bag + equipment + key items).
         totals = [0] * len(im["_all_item_list"])
         for key in ("_item_list", "_equipment_item_list", "_important_item_list"):

@@ -12,7 +12,7 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 <img src="docs/screenshot-characters.png" alt="Characters tab: stats and equipped gear" width="760">
 
-[Features](#-features) · [Download](#-download) · [How to use](#-how-to-use) · [Your system](#-instructions-by-system) · [Item IDs](#-item-ids) · [FAQ](#-faq)
+[Features](#-features) · [Download](#-download) · [How to use](#-how-to-use) · [Your system](#-instructions-by-system) · [Cheats](#-cheats) · [Item IDs](#-item-ids) · [FAQ](#-faq)
 
 </div>
 
@@ -22,11 +22,13 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 | | |
 |---|---|
-| 💰 **Money & FP** | Coins, Frog Coins, Flower Points, Wine Coins and play time |
-| 🧑‍🤝‍🧑 **Characters** | Level, EXP, HP and all five stats for Mario, Mallow, Geno, Bowser and Peach |
+| 💰 **Money & FP** | Coins, Frog Coins, Flower Points, Wine Coins and play time, each with a **Max** button (plus **Max all**) |
+| 🧑‍🤝‍🧑 **Characters** | Level, EXP, HP and all five stats for Mario, Mallow, Geno, Bowser and Peach. **Max out** one character or all of them in one click |
 | 🔨 **Equipment** | Change each character's weapon, armor and accessory. Only gear they can wear is listed, with its stat bonuses |
-| 🎒 **Items & Storage Box** | Every consumable by name. Set how many you carry (up to 30) and how many are in the Storage Box at Mario's Pad |
-| 🗝️ **Equipment bag & key items** | See every piece of gear, who can equip it and who's wearing it. Equip, unequip, add or remove gear right from the list |
+| 🎒 **Items & Storage Box** | Every consumable by name. Set how many you carry (up to 30) and how many are in the Storage Box at Mario's Pad. Multi-select or **Select all** to change many items at once |
+| 🗝️ **Equipment bag & key items** | Every piece of gear and every key item with how many you own, who can equip it and who's wearing it. Equip and unequip, multi-select, **Select all** and **Max owned**, with sensible limits |
+| 🎮 **Cheats** | Add or import cheat codes, switch them on and off, and install them into Ryujinx or a yuzu-family emulator in one click, or export them for a Switch running Atmosphère |
+| ↕️ **Sortable lists** | Click any column heading to sort; click again to reverse |
 | 🔍 **Review before saving** | A window lists every change, like *"Mario Weapon: Hammer → Super Hammer"*, before anything is written |
 | 🛟 **Backups** | Warns you before saving if your save isn't backed up, plus unlimited manual backups with notes and one-click restore |
 | 🔒 **Safe by design** | Anything you don't edit is written back byte-for-byte as the game wrote it |
@@ -43,6 +45,10 @@ Works with saves from a real Switch and from every major Switch emulator.
 **Equipment Bag & Key Items**
 
 <img src="docs/screenshot-equipment.png" alt="Equipment Bag tab" width="760">
+
+**Cheats**
+
+<img src="docs/screenshot-cheats.png" alt="Cheats tab" width="760">
 
 **General**
 
@@ -178,6 +184,32 @@ The files are plain JSON text encoded as UTF-16 LE. They have no checksum or enc
 - **Back up now…** makes a manual backup, with an optional note like *"before Bowser's Keep"*.
 - **Restore a backup…** lists your backups newest first. You can delete old ones there too.
 - Backups live in a `backups` folder next to the editor. There's no limit on how many you keep.
+
+---
+
+## 🎮 Cheats
+
+Cheats change the game **while it's running** (things like infinite HP or EXP multipliers), so they aren't part of your save file. The **Cheats** tab manages them for you.
+
+1. **Get cheat codes** from the community, e.g. [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg) or GBAtemp. The **Find cheats online** button opens CheatSlips. Codes use the Atmosphère format:
+   ```
+   [Cheat name]
+   04000000 01234567 0000270F
+   ```
+2. **Import** a cheat file, or **Add cheat…** and paste a code. Invalid codes are rejected with a clear message.
+3. **Turn on** the cheats you want: double-click a row, or select rows and click **Turn on/off**.
+4. Click **Install to emulator**, then restart the game.
+
+| Where | What the editor does |
+|---|---|
+| **Ryujinx** | Writes the cheats to `mods\contents\0100bc0018138000\SMR Save Editor Cheats\cheats\<build ID>.txt` and switches them on in Ryujinx's `enabled.txt`. They also show in Ryujinx's **Manage Cheats** window. |
+| **yuzu family** | Writes the cheats to `load\0100BC0018138000\SMR Save Editor Cheats\cheats\<build ID>.txt`. Make sure the **SMR Save Editor Cheats** add-on is enabled in the game's properties. |
+| **Switch (Atmosphère)** | **Export for Switch (SD card)…** writes `atmosphere/contents/0100BC0018138000/cheats/<build ID>.txt` to your SD card. Toggle cheats in game with EdiZon or Breeze. |
+
+> [!IMPORTANT]
+> Cheat codes only work for the **exact game version** they were written for. The editor reads your game's **build ID** from Ryujinx's log (v1.0.0 is `E968832CADE2AD7C`). You can also type it in: Ryujinx shows it at the top of **Manage Cheats**.
+
+The editor only manages its own cheat file, so it never touches cheats you installed another way. Your cheat list is kept by the app, so removing cheats from the emulator doesn't lose them.
 
 ---
 
@@ -345,7 +377,7 @@ The save stores every item as a number from **0 to 167**. Click a category to ex
 | 123 | Earlier Times | Battle |
 | 124 | Yoshi Cookie | Battle |
 | 125 | Goodie Bag | Battle |
-| 126 | Lucky Jewel | Recovery |
+| 126 | Lucky Jewel | Battle |
 | 127 | Wilt Shroom | Recovery |
 | 128 | Rotten Mush | Recovery |
 | 129 | Moldy Mush | Recovery |
@@ -354,7 +386,7 @@ The save stores every item as a number from **0 to 167**. Click a category to ex
 </details>
 
 <details>
-<summary><b>🗝️ Key items (view-only)</b> (29)</summary>
+<summary><b>🗝️ Key items</b> (29)</summary>
 
 | ID | Name |
 |---:|---|
@@ -406,11 +438,33 @@ Star Pieces aren't a counter. Each star is one bit set by a story event when you
 </details>
 
 <details>
-<summary><b>Why can't I edit key items?</b></summary>
+<summary><b>Can I edit key items?</b></summary>
 
 <br>
 
-Key items are tied to story progress. Adding or removing them can soft-lock the game, so they're view-only.
+Yes, on the **Equipment Bag & Key Items** tab, up to 1 of each. Key items are tied to story progress, though: adding one early or removing one you still need can block the story. The editor asks you to confirm the first time you change key items each session.
+
+</details>
+
+<details>
+<summary><b>How many pieces of equipment can I own?</b></summary>
+
+<br>
+
+- **1** of each item only one character can wear, like Hammer or Froggie Stick.
+- **Up to 5** of gear every character can wear, like Work Pants or Exp. Booster.
+- **1** of each key item.
+
+You can't set the amount below the number of copies being worn. Unequip them first.
+
+</details>
+
+<details>
+<summary><b>What does "Max out" do to a character?</b></summary>
+
+<br>
+
+It sets level 30, 9,999 EXP (the game's cap, enough for level 30), 999 HP and 255 in every stat. The stats shown with equipment are updated to match.
 
 </details>
 
@@ -438,6 +492,15 @@ Yes. Their stats and gear are already in the save. The changes apply once they j
 <br>
 
 The stats for the post-game weapons (Sage Stick, Stella 023, Wonder Chomp) come from community sources and may be slightly off. Re-equip the item in-game and the game recalculates them.
+
+</details>
+
+<details>
+<summary><b>Can the editor make new cheats, like a guaranteed bonus after every battle?</b></summary>
+
+<br>
+
+No. A cheat code needs memory addresses found by reverse-engineering the exact game version, so the editor can only install codes that someone has already made and shared. There's also no "no random encounters" cheat needed: the remake has no random encounters, because enemies are visible on the map.
 
 </details>
 
