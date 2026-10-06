@@ -212,7 +212,10 @@ The guides are written by [Game8](https://game8.co/games/Super-Mario-RPG/archive
 
 ## 🎮 Cheats
 
-Cheats change the game **while it's running** (things like infinite HP or EXP multipliers), so they aren't part of your save file. The **Cheats** tab manages them for you.
+> [!WARNING]
+> **Cheats are experimental.** A code only works for the exact game version it was made for, and may behave differently between emulators. A mismatched code can crash the game or corrupt your save, so **back up first**. Read the full **[cheat guide](docs/CHEATS.md)** before you start.
+
+Cheats change the game **while it's running** (things like infinite HP or EXP multipliers), so they aren't part of your save file. The **Cheats** tab (the last tab) manages them for you.
 
 1. **Get cheat codes** from the community, e.g. [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg) or GBAtemp. The **Find cheats online** button opens CheatSlips. Codes use the Atmosphère format:
    ```

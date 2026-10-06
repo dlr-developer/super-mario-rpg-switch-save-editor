@@ -370,6 +370,43 @@ CHAPTERS = [   # (chapter, goal, Game8 guide)
 ]
 CHEAT_LINE = re.compile(r"^[0-9A-Fa-f]{8}( [0-9A-Fa-f]{8})*$")
 KNOWN_BUILDS = {"E968832CADE2AD7C": "v1.0.0"}
+CHEAT_GUIDE_URL = "https://github.com/dlr-developer/super-mario-rpg-switch-save-editor/blob/main/docs/CHEATS.md"
+CHEAT_GUIDE = [   # (tag, line) shown in the in-app guide; docs/CHEATS.md has the full version
+    ("warn", "Cheats are experimental. A wrong or mismatched code can crash the game or corrupt your save. "
+             "Always back up first."),
+    ("h", "How cheats work"),
+    ("", "While the game runs, everything it tracks (HP, coins, items) is a number in memory. A cheat is a "
+         "short list of instructions such as \"write 9999 at this address\". The emulator, or Atmosphère on a "
+         "Switch, repeats them many times a second, so the value stays locked. Cheats never change your save "
+         "file directly, but if you save while one is on, its effects are saved too."),
+    ("h", "Will a code work for me?"),
+    ("", "• Game version: a code only works for the build it was made for. The build ID is shown on this tab "
+         "(v1.0.0 is E968832CADE2AD7C). After a game update, old codes usually stop working."),
+    ("", "• Emulator: Ryujinx and its forks, the yuzu family (yuzu, suyu, sudachi, citron, eden, torzu) and "
+         "Atmosphère on a real Switch all use the same Atmosphère cheat format. Most codes work in all of "
+         "them, but some behave differently, so test before relying on one."),
+    ("h", "Using a cheat"),
+    ("", "1. Back up your save (Back up now… at the top of the window)."),
+    ("", "2. Import a cheat file or click Add cheat… and paste a code made for your build ID."),
+    ("", "3. Turn on only the cheats you want (double-click a row)."),
+    ("", "4. Click Install to emulator (or Export for Switch), then restart the game."),
+    ("", "5. If the game misbehaves: close it, turn the cheat off, Install again, and restore your backup."),
+    ("h", "Where the files go"),
+    ("", "• Ryujinx: mods\\contents\\0100bc0018138000\\SMR Save Editor Cheats\\cheats\\<build ID>.txt, switched "
+         "on through Ryujinx's enabled.txt. You'll also see them under right-click → Manage Cheats."),
+    ("", "• yuzu family: load\\0100BC0018138000\\SMR Save Editor Cheats\\cheats\\<build ID>.txt. Enable the "
+         "\"SMR Save Editor Cheats\" add-on in the game's properties."),
+    ("", "• Switch: atmosphere/contents/0100BC0018138000/cheats/<build ID>.txt on the SD card."),
+    ("h", "Code format"),
+    ("", "[Cheat name]\n04000000 01234567 0000270F\n(format example only, not a real code)"),
+    ("", "Each line is groups of 8 hexadecimal digits. A name in { } is a master code: some cheats need it "
+         "turned on as well."),
+    ("h", "Making your own"),
+    ("", "Search the game's memory for a value you can see (for example your coins), change it in game, "
+         "search again, and repeat until one address is left. Tools like Breeze or EdiZon SE on a Switch can "
+         "then write it out as a cheat code. Data that moves around between sessions needs a pointer search "
+         "so the code keeps working. See the full guide online for details."),
+]
 
 
 def parse_cheats(text):
@@ -460,11 +497,11 @@ def detect_build_ids(emulator):
 PALETTES = {
     "light": {"bg": "#f0f0f0", "surface": "#e6e6e6", "field": "#ffffff", "fg": "#000000", "muted": "#555555",
               "faint": "#888888", "border": "#c8c8c8", "hover": "#dcdcdc", "select": "#0078d7",
-              "accent": "#0b5cad", "warn": "#b26a00", "tag_worn": "#0b5cad", "tag_key": "#6a4c93",
+              "accent": "#0b5cad", "warn": "#b26a00", "banner": "#fff4e0", "tag_worn": "#0b5cad", "tag_key": "#6a4c93",
               "tag_none": "#999999", "tag_on": "#2e7d32", "tag_off": "#888888"},
     "dark": {"bg": "#1f2125", "surface": "#2b2e33", "field": "#26292e", "fg": "#e8e8e8", "muted": "#a9adb4",
              "faint": "#7d828a", "border": "#3d4148", "hover": "#353940", "select": "#2f5f9e",
-             "accent": "#6cb4ff", "warn": "#ffb74d", "tag_worn": "#6cb4ff", "tag_key": "#c7a8ff",
+             "accent": "#6cb4ff", "warn": "#ffb74d", "banner": "#3a3020", "tag_worn": "#6cb4ff", "tag_key": "#c7a8ff",
              "tag_none": "#6f747c", "tag_on": "#7fd88a", "tag_off": "#7d828a"},
 }
 THEMES = ("System", "Light", "Dark")
@@ -716,50 +753,6 @@ class Editor(tk.Tk):
             f"gear everyone can wear (e.g. Work Pants), and 1 of each key item. You can't own fewer "
             "copies than are being worn. Equipping here also updates the Characters tab.")).grid(
             row=3, column=0, columnspan=6, sticky="w", pady=(8, 0))
-        # Cheats
-        ct = ttk.Frame(nb, padding=12)
-        nb.add(ct, text="Cheats")
-        top = ttk.LabelFrame(ct, text="Game & emulator", padding=8)
-        top.grid(row=0, column=0, columnspan=6, sticky="ew")
-        self.cheat_target = tk.StringVar()
-        ttk.Label(top, textvariable=self.cheat_target, wraplength=820, justify="left").grid(
-            row=0, column=0, columnspan=5, sticky="w")
-        ttk.Label(top, text="Game build ID:").grid(row=1, column=0, sticky="w", pady=(6, 0))
-        self.build_id = tk.StringVar()
-        self.build_box = ttk.Combobox(top, textvariable=self.build_id, width=22)
-        self.build_box.grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
-        self.build_box.bind("<<ComboboxSelected>>", lambda e: self.load_cheats())
-        self.build_box.bind("<FocusOut>", lambda e: self.load_cheats())
-        self.build_note = tk.StringVar()
-        ttk.Label(top, textvariable=self.build_note, style="Muted.TLabel").grid(row=1, column=2, sticky="w", padx=6, pady=(6, 0))
-        ttk.Button(top, text="Detect again", command=self.detect_cheat_target).grid(row=1, column=3, padx=4, pady=(6, 0))
-
-        self.cheat_tree = self._make_tree(ct, (("on", "On", 50), ("name", "Cheat", 330), ("kind", "Type", 110),
-                                               ("lines", "Code lines", 90), ("installed", "In emulator", 110)),
-                                          row=1, height=9)
-        self.cheat_tree.bind("<Double-1>", lambda e: self.toggle_cheats())
-
-        acts = ttk.Frame(ct)
-        acts.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
-        for text, cmd in (("Turn on/off", self.toggle_cheats), ("Add cheat…", self.add_cheat),
-                          ("Import cheat file…", self.import_cheats), ("Edit…", self.edit_cheat),
-                          ("Delete", self.delete_cheats), ("Select all", lambda: self.cheat_tree.selection_set(
-                              self.cheat_tree.get_children()))):
-            ttk.Button(acts, text=text, command=cmd).pack(side="left", padx=(0, 4))
-
-        inst = ttk.Frame(ct)
-        inst.grid(row=3, column=0, columnspan=6, sticky="w", pady=(8, 0))
-        self.primary_button(inst, "Install to emulator", self.install_cheats).pack(side="left")
-        ttk.Button(inst, text="Remove from emulator", command=self.uninstall_cheats).pack(side="left", padx=6)
-        ttk.Button(inst, text="Export for Switch (SD card)…", command=self.export_cheats).pack(side="left")
-        ttk.Button(inst, text="Find cheats online", command=lambda: webbrowser.open(CHEATS_URL)).pack(side="left", padx=6)
-        ttk.Label(ct, style="Muted.TLabel", wraplength=820, justify="left", text=(
-            "Cheats change the game while it runs. They aren't saved in your save file. Add or import "
-            "codes in Atmosphère format ([Cheat name] followed by lines of 8-digit hex codes), turn on the "
-            "ones you want, then click Install to emulator and restart the game. Codes only work for "
-            "the game version they were made for, so check the build ID. Your cheat list is kept by "
-            "this app, so it's safe to remove cheats from the emulator and install them again later.")).grid(
-            row=4, column=0, columnspan=6, sticky="w", pady=(10, 0))
         # Walkthrough
         wk = ttk.Frame(nb, padding=12)
         nb.add(wk, text="Walkthrough")
@@ -801,6 +794,61 @@ class Editor(tk.Tk):
             "by IGN. Your current chapter is worked out from the Star Pieces in this save; the hidden "
             f"treasure count comes from the save too (the game doesn't record which of the {HIDDEN_TREASURES} "
             "you've found, only how many).")).grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
+        # Cheats
+        ct = ttk.Frame(nb, padding=12)
+        nb.add(ct, text="Cheats")
+        banner = ttk.Frame(ct, style="Banner.TFrame", padding=10)
+        banner.grid(row=0, column=0, columnspan=7, sticky="ew", pady=(0, 8))
+        ttk.Label(banner, text="⚠  Experimental: cheats can crash the game or break your save",
+                  style="BannerTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(banner, style="Banner.TLabel", wraplength=640, justify="left", text=(
+            "A code only works for the exact game version it was made for (its build ID) and may behave "
+            "differently between emulators. Back up your save before using cheats, and turn a cheat off "
+            "if anything looks wrong.")).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Button(banner, text="Read the cheat guide", command=self.show_cheat_guide).grid(
+            row=0, column=1, rowspan=2, sticky="e", padx=(12, 0))
+        banner.columnconfigure(0, weight=1)
+        top = ttk.LabelFrame(ct, text="Game & emulator", padding=8)
+        top.grid(row=1, column=0, columnspan=6, sticky="ew")
+        self.cheat_target = tk.StringVar()
+        ttk.Label(top, textvariable=self.cheat_target, wraplength=820, justify="left").grid(
+            row=0, column=0, columnspan=5, sticky="w")
+        ttk.Label(top, text="Game build ID:").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.build_id = tk.StringVar()
+        self.build_box = ttk.Combobox(top, textvariable=self.build_id, width=22)
+        self.build_box.grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
+        self.build_box.bind("<<ComboboxSelected>>", lambda e: self.load_cheats())
+        self.build_box.bind("<FocusOut>", lambda e: self.load_cheats())
+        self.build_note = tk.StringVar()
+        ttk.Label(top, textvariable=self.build_note, style="Muted.TLabel").grid(row=1, column=2, sticky="w", padx=6, pady=(6, 0))
+        ttk.Button(top, text="Detect again", command=self.detect_cheat_target).grid(row=1, column=3, padx=4, pady=(6, 0))
+
+        self.cheat_tree = self._make_tree(ct, (("on", "On", 50), ("name", "Cheat", 330), ("kind", "Type", 110),
+                                               ("lines", "Code lines", 90), ("installed", "In emulator", 110)),
+                                          row=2, height=6)
+        self.cheat_tree.bind("<Double-1>", lambda e: self.toggle_cheats())
+
+        acts = ttk.Frame(ct)
+        acts.grid(row=3, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        for text, cmd in (("Turn on/off", self.toggle_cheats), ("Add cheat…", self.add_cheat),
+                          ("Import cheat file…", self.import_cheats), ("Edit…", self.edit_cheat),
+                          ("Delete", self.delete_cheats), ("Select all", lambda: self.cheat_tree.selection_set(
+                              self.cheat_tree.get_children()))):
+            ttk.Button(acts, text=text, command=cmd).pack(side="left", padx=(0, 4))
+
+        inst = ttk.Frame(ct)
+        inst.grid(row=4, column=0, columnspan=6, sticky="w", pady=(8, 0))
+        self.primary_button(inst, "Install to emulator", self.install_cheats).pack(side="left")
+        ttk.Button(inst, text="Remove from emulator", command=self.uninstall_cheats).pack(side="left", padx=6)
+        ttk.Button(inst, text="Export for Switch (SD card)…", command=self.export_cheats).pack(side="left")
+        ttk.Button(inst, text="Find cheats online", command=lambda: webbrowser.open(CHEATS_URL)).pack(side="left", padx=6)
+        ttk.Label(ct, style="Muted.TLabel", wraplength=820, justify="left", text=(
+            "Cheats change the game while it runs. They aren't saved in your save file. Add or import "
+            "codes in Atmosphère format ([Cheat name] followed by lines of 8-digit hex codes), turn on the "
+            "ones you want, then click Install to emulator and restart the game. Codes only work for "
+            "the game version they were made for, so check the build ID. Your cheat list is kept by "
+            "this app, so it's safe to remove cheats from the emulator and install them again later.")).grid(
+            row=5, column=0, columnspan=6, sticky="w", pady=(10, 0))
         nb.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
     def _make_tree(self, parent, cols, row=0, height=12):
@@ -1156,9 +1204,66 @@ class Editor(tk.Tk):
         return [n for n, p in enumerate(self.chars) if p.get("_name") and p.get("_id", n) in allowed]
 
     def on_tab_changed(self, _):
-        if self.data and self.nb.index("current") == 3:
+        tab = self.nb.tab(self.nb.select(), "text")
+        if self.data and tab.startswith("Equipment"):
             self.store_char()          # pick up gear changed on the Characters tab
             self.refresh_equipment()
+        if tab == "Cheats" and not self.settings.get("cheats_warning_seen"):
+            self.after(50, self.cheat_notice)
+
+    def cheat_notice(self):
+        """Shown once, the first time someone opens the Cheats tab."""
+        win = tk.Toplevel(self)
+        win.title("Cheats are experimental")
+        win.resizable(False, False)
+        win.transient(self)
+        win.grab_set()
+        body = ttk.Frame(win, padding=16)
+        body.pack(fill="both")
+        ttk.Label(body, text="⚠  Cheats are experimental", style="Warn.TLabel").pack(anchor="w")
+        ttk.Label(body, wraplength=460, justify="left", text=(
+            "Cheats change the game while it runs. A code made for a different game version, or one "
+            "that doesn't suit your emulator, can do nothing, crash the game, or corrupt your save.\n\n"
+            "• Back up your save first (Back up now… at the top).\n"
+            "• Only use codes made for your game's build ID.\n"
+            "• Turn a cheat off and restore a backup if anything goes wrong.")).pack(anchor="w", pady=(8, 0))
+        row = ttk.Frame(win, padding=(16, 0, 16, 16))
+        row.pack(fill="x")
+
+        def done():
+            self.settings["cheats_warning_seen"] = True
+            store_settings(self.settings)
+            win.destroy()
+
+        self.primary_button(row, "I understand", done).pack(side="right")
+        ttk.Button(row, text="Read the cheat guide", command=lambda: (done(), self.show_cheat_guide())).pack(
+            side="right", padx=6)
+        win.protocol("WM_DELETE_WINDOW", done)
+        self.center(win)
+
+    def show_cheat_guide(self):
+        win = tk.Toplevel(self)
+        win.title("Cheat guide")
+        win.geometry("720x600")
+        win.transient(self)
+        frame = ttk.Frame(win, padding=(12, 12, 12, 0))
+        frame.pack(fill="both", expand=True)
+        text = tk.Text(frame, wrap="word", font=("Segoe UI", 10), padx=12, pady=10, relief="flat")
+        sb = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=sb.set)
+        text.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        text.tag_configure("h", font=("Segoe UI", 12, "bold"), spacing1=12, spacing3=4)
+        text.tag_configure("warn", font=("Segoe UI", 10, "bold"), foreground=self.palette["warn"])
+        for kind, line in CHEAT_GUIDE:
+            text.insert("end", line + "\n", kind)
+        text.configure(state="disabled")
+        row = ttk.Frame(win, padding=12)
+        row.pack(fill="x")
+        ttk.Button(row, text="Close", command=win.destroy).pack(side="right")
+        ttk.Button(row, text="Full guide online", command=lambda: webbrowser.open(CHEAT_GUIDE_URL)).pack(
+            side="right", padx=6)
+        self.center(win)
 
     def max_owned(self, i):
         """1 of each key item and character-only gear; up to SHARED_MAX of gear anyone wears."""
@@ -1397,6 +1502,9 @@ class Editor(tk.Tk):
         style.configure("Muted.TLabel", foreground=p["muted"])
         style.configure("Faint.TLabel", foreground=p["faint"])
         style.configure("Warn.TLabel", foreground=p["warn"], font=(font, 12, "bold"))
+        style.configure("Banner.TFrame", background=p["banner"])
+        style.configure("Banner.TLabel", background=p["banner"], foreground=p["fg"])
+        style.configure("BannerTitle.TLabel", background=p["banner"], foreground=p["warn"], font=(font, 11, "bold"))
 
     def _recolor(self, widget):
         p = self.palette
