@@ -19,3 +19,6 @@ dist/
 
 # Save files should never be committed
 SMR_Save_Ver*
+
+# Release downloads (attach to a GitHub Release)
+*.zip

@@ -74,13 +74,16 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 | | |
 |---|---|
-| 🪟 **Windows** | Download **`Super-Mario-RPG-Switch-Save-Editor.exe`** from the [**latest release**](../../releases/latest) and double-click it. No install needed. |
+| 🪟 **Windows (recommended)** | Download **`Super-Mario-RPG-Switch-Save-Editor-Portable.zip`** from the [**latest release**](../../releases/latest), unzip it anywhere, and double-click **`Super Mario RPG Switch Save Editor.exe`** inside. Nothing to install, and it works with **Smart App Control**: the program you start is the official Python runtime, signed by the Python Software Foundation, bundled with the editor. |
+| 🪟 **Windows (single file)** | **`Super-Mario-RPG-Switch-Save-Editor.exe`** from the same release. Handier, but it isn't code-signed yet (see below). |
 | 🐍 **Any OS (from source)** | Install [Python 3.8+](https://www.python.org/downloads/) and run `python smr_save_editor.py`. On Windows you can also double-click `Open Save Editor.bat`. On Linux, also install `python3-tk`. |
 
 > [!NOTE]
-> **The `.exe` isn't code-signed yet**, so Windows may stop it:
+> **The single-file `.exe` isn't code-signed yet**, so Windows may stop it:
 > - **SmartScreen** ("Windows protected your PC"): click **More info → Run anyway**.
-> - **Smart App Control** ("This app has been blocked"): there's no "run anyway" option. Use the **Python version** instead. Python is signed, so Smart App Control allows it. Install [Python](https://www.python.org/downloads/), then double-click `Open Save Editor.bat`. Turning Smart App Control off isn't recommended, because on many PCs it can't be turned back on without resetting Windows.
+> - **Smart App Control** ("This app has been blocked"): there's no "run anyway" option, so use the **portable zip** instead. Turning Smart App Control off isn't recommended, because on many PCs it can't be turned back on without resetting Windows.
+>
+> In the portable version, the program file shows the Python icon (changing it would break the signature), but the editor's window and taskbar use the mushroom. To uninstall, delete the folder.
 
 ---
 
