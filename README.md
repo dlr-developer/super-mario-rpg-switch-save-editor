@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🍄 Super Mario RPG Switch Save Editor
+<img src="assets/icon.png" alt="App icon: a red mushroom with a save disk" width="128">
+
+# Super Mario RPG Switch Save Editor
 
 **A friendly desktop save editor for *Super Mario RPG* (Nintendo Switch, 2023 remake).**
 Works with saves from a real Switch and from every major Switch emulator.

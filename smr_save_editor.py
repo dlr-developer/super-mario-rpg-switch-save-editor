@@ -24,6 +24,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 APP_NAME = "Super Mario RPG Switch Save Editor"
 APP_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 BACKUP_DIR = os.path.join(APP_DIR, "backups")
+RESOURCE_DIR = getattr(sys, "_MEIPASS", APP_DIR)     # bundled files live here inside the .exe
 SETTINGS_PATH = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.config"),
                              APP_NAME, "settings.json")
 TITLE_ID = "0100BC0018138000"
@@ -524,6 +525,7 @@ class Editor(tk.Tk):
     def __init__(self, folder=None):
         super().__init__()
         self.title(APP_NAME)
+        self._set_icon()
         self.geometry("960x740")
         self.minsize(820, 560)
         self.settings = load_settings()
@@ -555,6 +557,17 @@ class Editor(tk.Tk):
         self.set_folder(start or autodetect())
 
     # ---------- layout ----------
+    def _set_icon(self):
+        icons = os.path.join(RESOURCE_DIR, "assets")
+        try:
+            if sys.platform == "win32":
+                self.iconbitmap(default=os.path.join(icons, "icon.ico"))   # also used by pop-ups
+            else:
+                self._icon = tk.PhotoImage(file=os.path.join(icons, "icon.png"))
+                self.iconphoto(True, self._icon)
+        except (tk.TclError, OSError):
+            pass
+
     def _style(self):
         self.style = ttk.Style(self)
         self.base_theme = self.style.theme_use()      # the native look, used for Light
