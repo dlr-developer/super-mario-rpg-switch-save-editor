@@ -65,6 +65,8 @@ Build ID `E968832CADE2AD7C` · title ID `0100BC0018138000`
 | 30a. Force Item Drop (Edit the Item Value) | Every enemy drops the item set by the last code line (00000040 here). Needs 12a or 12b. Item values: https://docs.google.com/spreadsheets/d/e/2PACX-1vRbw5pNbLt_aTgJGIZ8Ti1TAnw8aBIa1teZPr8sSyfu_oLQcvluR8R28Cko8R0pcvkMEZWzY-BHpQQV/pubhtml | ❔ | ❔ | ❔ |
 | 30b. Force Item Drop (Off) | Switches 30a back off. | ❔ | ❔ | ❔ |
 | 31. 5 of Every Shared Gear (Use Any Item After) | Gives you 5 of every piece of gear all characters can wear. Use any item afterwards to refresh. | ❔ | ❔ | ❔ |
+| 32. Coins Never Go Down | Spending coins doesn't lower them. From the CheatSlips set ("Gold coins remain unchanged"). | ❔ | ❔ | ❔ |
+| 33. Frog Coins Never Go Down | Spending Frog Coins doesn't lower them. From the CheatSlips set ("Frog coins remain unchanged"). | ❔ | ❔ | ❔ |
 
 ✅ works · ❌ doesn't work · ❔ untested
 
@@ -72,4 +74,5 @@ Install with the editor's **Cheats** tab (**Import cheat file…** and pick `E96
 
 ## Credits
 
-- Cheat codes by **khuong**. Reformatted for this library; the codes themselves are unchanged.
+- Cheat codes 00–31 and the master code by **khuong**. Reformatted for this library; the codes themselves are unchanged.
+- Cheats 32–33 by **怪盗B** on [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg), with the one setup line from their master code added so each works on its own.

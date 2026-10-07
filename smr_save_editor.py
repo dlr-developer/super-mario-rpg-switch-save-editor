@@ -138,7 +138,9 @@ CHAR_FIELDS = [
 
 CARRY_MAX = 30     # per item; extra goes to the Storage Box at Mario's Pad
 STORAGE_MAX = 99
-FIELD_ONLY = (99, 100, 101)   # Flower Tab/Jar/Box raise max FP; not in the battle menu
+# Not in the battle menu by default: Flower Tab/Jar/Box (raise max FP) and the spoiled
+# mushrooms (Wilt Shroom, Rotten Mush, Moldy Mush). Items already in a save follow the save.
+FIELD_ONLY = (99, 100, 101, 127, 128, 129)
 
 
 def is_recovery(i):
@@ -457,9 +459,9 @@ TEST_STATES = ("Untested", "Works", "Doesn't work")
 TEST_ICONS = {"Untested": "❔", "Works": "✅", "Doesn't work": "❌"}
 
 
-def library_builds():
+def library_builds(lib_dir=None):
     """{build ID: folder} for every game version that has a cheat folder."""
-    root = os.path.join(CHEAT_LIB_DIR, GAME_FOLDER)
+    root = os.path.join(lib_dir or CHEAT_LIB_DIR, GAME_FOLDER)
     found = {}
     if os.path.isdir(root):
         for name in sorted(os.listdir(root)):
@@ -474,9 +476,9 @@ def build_folder(bid):
         CHEAT_LIB_DIR, GAME_FOLDER, f"{KNOWN_BUILDS.get(bid, 'unknown version')} - {bid}")
 
 
-def read_library(bid):
+def read_library(bid, lib_dir=None):
     """Cheats filed for one build: the Atmosphère file plus the details in info.json."""
-    folder = library_builds().get(bid)
+    folder = library_builds(lib_dir).get(bid)
     if not folder:
         return []
     try:
@@ -547,8 +549,40 @@ def write_library(bid, cheats, credits=None):
                 + ("\n## Credits\n\n" + "\n".join(f"- {c}" for c in credits) + "\n" if credits else ""))
 
 
+def merge_bundled_library():
+    """The single-file .exe carries the cheat library inside it. Copy its cheats into the
+    cheats folder next to the app, adding any the user doesn't have yet (by name) without
+    touching cheats they've edited. Running from the repo or the portable app, the bundled
+    library *is* the cheats folder, so there's nothing to do."""
+    bundled = os.path.join(RESOURCE_DIR, "cheats")
+    if os.path.normcase(os.path.abspath(bundled)) == os.path.normcase(os.path.abspath(CHEAT_LIB_DIR)):
+        return
+    settings = load_settings()
+    offered = settings.setdefault("bundled_cheats_offered", {})   # so cheats the user deleted stay deleted
+    for bid in library_builds(bundled):
+        theirs = read_library(bid, bundled)
+        mine = read_library(bid)
+        seen = set(offered.get(bid, []))
+        have = {c["name"] for c in mine}
+        extra = [c for c in theirs if c["name"] not in have and c["name"] not in seen]
+        offered[bid] = sorted(seen | {c["name"] for c in theirs})
+        if not extra and bid in library_builds():
+            continue
+        try:
+            credits = json.load(open(os.path.join(library_builds(bundled)[bid], "info.json"),
+                                     encoding="utf-8")).get("credits", [])
+        except (OSError, ValueError):
+            credits = None
+        try:
+            write_library(bid, mine + extra, credits=credits)
+        except OSError:
+            pass
+    store_settings(settings)
+
+
 def ensure_known_folders():
     """Create a folder for every known game version, so the library lists them all."""
+    merge_bundled_library()
     for bid in KNOWN_BUILDS:
         if bid not in library_builds():
             try:
@@ -670,6 +704,7 @@ class Editor(tk.Tk):
         self.items = {}     # consumable id -> number carried
         self.order = []     # item IDs in the order the game stored them
         self.known_recovery, self.known_battle = set(), set()
+        self.known_in_battle_menu = set()
         self.storage = []   # per-ID counts in the Storage Box
         self.equipment = []
         self.key_items = []
@@ -1114,6 +1149,7 @@ class Editor(tk.Tk):
         self.order = list(self.items)
         self.known_recovery = set(ordered_counts(im["_normal_menu_heal_item_list"]))
         self.known_battle = set(ordered_counts(im["_normal_menu_battle_item_list"]))
+        self.known_in_battle_menu = set(ordered_counts(im["_battle_menu_item_list"]))
         self.storage = list(im["_storage_box_list"])
         self.equipment = [i for i in im["_equipment_item_list"] if i]
         self.key_items = [i for i in im["_important_item_list"] if i]
@@ -1134,7 +1170,6 @@ class Editor(tk.Tk):
                 messagebox.showerror("Invalid value", f"{p['_name']}: '{v.get()}' is not a number.")
                 return False
             p[key] = max(lo, min(hi, val))
-        p["_hp"] = min(p["_hp"], p["_hp_max"])
         for slot, v in self.gear_vars.items():
             if v.get():
                 p[slot] = int(v.get().split()[0])
@@ -1258,8 +1293,15 @@ class Editor(tk.Tk):
             return False
         return is_recovery(i)
 
+    def in_battle_menu(self, i):
+        """Whether an item shows in the battle menu: as the game filed it in this save, else the
+        default (everything except the menu-only items)."""
+        if i in self.order:
+            return i in self.known_in_battle_menu
+        return i not in FIELD_ONLY
+
     def menu_label(self, i):
-        if i in FIELD_ONLY:
+        if not self.in_battle_menu(i) and self.recovery(i):
             return "Recovery (menu only)"
         return "Recovery" if self.recovery(i) else "Battle"
 
@@ -2182,7 +2224,7 @@ class Editor(tk.Tk):
         im["_item_list"] = pad(expand(lambda i: True), size)
         im["_normal_menu_heal_item_list"] = pad(heal, size)
         im["_normal_menu_battle_item_list"] = pad(battle, size)
-        im["_battle_menu_item_list"] = pad(expand(lambda i: i not in FIELD_ONLY), size)
+        im["_battle_menu_item_list"] = pad(expand(self.in_battle_menu), size)
         im["_storage_box_list"] = list(self.storage)
         im["_equipment_item_list"] = pad(self.equipment, len(im["_equipment_item_list"]))
         if len(self.key_items) > len(im["_important_item_list"]):

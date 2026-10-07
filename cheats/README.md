@@ -22,6 +22,8 @@ cheats/
 | Emulator (Ryujinx, yuzu family) or Switch | ❌ No | They all run the same Atmosphère cheat format, so one file works everywhere. Each cheat records where it was **tested** instead: ✅ works · ❌ doesn't work · ❔ untested |
 | Switch firmware | ❌ No | Cheats talk to the game, not the system |
 
+The library comes with every download: it's in the repo, in the portable zip, and inside the single-file `.exe`, which copies it next to itself the first time it runs (and adds new cheats from later versions without touching ones you've edited or deleted).
+
 ## Using a cheat file
 
 - **With the editor:** on the **Cheats** tab, click **Import cheat file…** and pick the `.txt` inside the version folder. The descriptions and test results in `info.json` come along too.

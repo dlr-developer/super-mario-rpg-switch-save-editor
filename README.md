@@ -444,9 +444,9 @@ The save stores every item as a number from **0 to 167**. Click a category to ex
 | 124 | Yoshi Cookie | Battle |
 | 125 | Goodie Bag | Battle |
 | 126 | Lucky Jewel | Battle |
-| 127 | Wilt Shroom | Recovery |
-| 128 | Rotten Mush | Recovery |
-| 129 | Moldy Mush | Recovery |
+| 127 | Wilt Shroom | Recovery (menu only) |
+| 128 | Rotten Mush | Recovery (menu only) |
+| 129 | Moldy Mush | Recovery (menu only) |
 | 130 | Mushroom (Triplets) | Recovery |
 
 </details>

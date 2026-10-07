@@ -4,7 +4,8 @@
   "version": "v1.0.0",
   "build_id": "E968832CADE2AD7C",
   "credits": [
-    "Cheat codes by **khuong**. Reformatted for this library; the codes themselves are unchanged."
+    "Cheat codes 00–31 and the master code by **khuong**. Reformatted for this library; the codes themselves are unchanged.",
+    "Cheats 32–33 by **怪盗B** on [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg), with the one setup line from their master code added so each works on its own."
   ],
   "cheats": [
     {
@@ -610,6 +611,26 @@
     {
       "name": "31. 5 of Every Shared Gear (Use Any Item After)",
       "description": "Gives you 5 of every piece of gear all characters can wear. Use any item afterwards to refresh.",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "32. Coins Never Go Down",
+      "description": "Spending coins doesn't lower them. From the CheatSlips set (\"Gold coins remain unchanged\").",
+      "master": false,
+      "tested": {
+        "Ryujinx": "Untested",
+        "yuzu family": "Untested",
+        "Switch": "Untested"
+      }
+    },
+    {
+      "name": "33. Frog Coins Never Go Down",
+      "description": "Spending Frog Coins doesn't lower them. From the CheatSlips set (\"Frog coins remain unchanged\").",
       "master": false,
       "tested": {
         "Ryujinx": "Untested",
