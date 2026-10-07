@@ -27,11 +27,11 @@ Works with saves from a real Switch and from every major Switch emulator.
 | 💰 **Money & FP** | Coins, Frog Coins, Flower Points, Wine Coins and play time, each with a **Max** button (plus **Max all**) |
 | 🧑‍🤝‍🧑 **Characters** | Level, EXP, HP and all five stats for Mario, Mallow, Geno, Bowser and Peach. **Max out** one character or all of them in one click |
 | 🔨 **Equipment** | Change each character's weapon, armor and accessory. Only gear they can wear is listed, with its stat bonuses |
-| 🎒 **Items & Storage Box** | Every consumable by name. Set how many you carry (up to 30) and how many are in the Storage Box at Mario's Pad. Multi-select or **Select all** to change many items at once |
+| 🎒 **Items & Storage Box** | Every consumable by name. Set how many you carry (up to 30) and how many are in the Storage Box at Mario's Pad. Multi-select or **Select all** to change many items at once, and a **Bag space** bar shows how much room is left |
 | 🗝️ **Equipment bag & key items** | Every piece of gear and every key item with how many you own, who can equip it and who's wearing it. Equip and unequip, multi-select, **Select all** and **Max owned**, with sensible limits |
-| 🎮 **Cheats** | Add or import cheat codes, switch them on and off, and install them into Ryujinx or a yuzu-family emulator in one click, or export them for a Switch running Atmosphère |
+| 🎮 **Cheats** *(experimental)* | Comes with **63 cheats for v1.0.0**: infinite HP and FP, damage, EXP and coin multipliers, 100% drops, perfect jumps, free shopping and more. Switch them on and install them into Ryujinx or a yuzu-family emulator in one click, or export them for a Switch running Atmosphère. Add or import your own too |
 | 🗺️ **Walkthrough** | Shows the chapter you're on, Star Pieces and hidden treasures found (read from your save), with one-click links to the Game8 chapter guides and IGN's hidden treasure locations |
-| 🌗 **Light & dark mode** | Light, Dark, or follow your Windows setting, including a dark title bar |
+| 🌗 **Light & dark mode** | Light, Dark, or follow your system's setting (Windows, macOS, GNOME, KDE), including a dark title bar on Windows |
 | ↕️ **Sortable lists** | Click any column heading to sort; click again to reverse |
 | 🔍 **Review before saving** | A window lists every change, like *"Mario Weapon: Hammer → Super Hammer"*, before anything is written |
 | 🛟 **Backups** | Warns you before saving if your save isn't backed up, plus unlimited manual backups with notes and one-click restore |
@@ -54,7 +54,7 @@ Works with saves from a real Switch and from every major Switch emulator.
 
 <img src="docs/screenshot-walkthrough.png" alt="Walkthrough tab" width="760">
 
-**Cheats** (the two cheats shown are format examples, not real codes)
+**Cheats**
 
 <img src="docs/screenshot-cheats.png" alt="Cheats tab" width="760">
 
@@ -252,17 +252,20 @@ The guides are written by [Game8](https://game8.co/games/Super-Mario-RPG/archive
 > [!WARNING]
 > **Cheats are experimental.** A code only works for the exact game version it was made for, and may behave differently between emulators. A mismatched code can crash the game or corrupt your save, so **back up first**. Read the full **[cheat guide](docs/CHEATS.md)** before you start.
 
-Cheats change the game **while it's running** (things like infinite HP or EXP multipliers), so they aren't part of your save file. The **Cheats** tab (the last tab) manages them for you.
+Cheats change the game **while it's running** (things like infinite HP or EXP multipliers), so they aren't part of your save file. The **Cheats** tab (the last tab) manages them for you, and it **comes with 63 cheats for v1.0.0** of the game, each with a short description.
 
-1. **Get cheat codes** from the community, e.g. [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg) or GBAtemp. The **Find cheats online** button opens CheatSlips. Codes use the Atmosphère format:
-   ```
-   [Cheat name]
-   04000000 01234567 0000270F
-   ```
-   *(This shows the format only. It isn't a real code for this game.)*
-2. **Import** a cheat file, or **Add cheat…** and paste a code. Invalid codes are rejected with a clear message.
-3. **Turn on** the cheats you want: double-click a row, or select rows and click **Turn on/off**.
-4. Click **Install to emulator**, then restart the game.
+1. **Back up your save** with **Back up now…**.
+2. **Turn on** the cheats you want: double-click a row, or select rows and click **Turn on/off**. Where a cheat has variants (like *Player Damage x2* and *x3*), turn on only one of them. The descriptions say so.
+3. Click **Install to emulator**, then restart the game. The **master code** the set relies on is installed automatically.
+
+**Want more?** Click **Add cheat…** and paste a code, or **Import cheat file…** for a whole file (**Find cheats online** opens CheatSlips). Invalid codes are rejected with a clear message. Codes use the Atmosphère format:
+
+```
+[Cheat name]
+04000000 01234567 0000270F
+```
+
+*(This shows the format only. It isn't a real code for this game.)*
 
 | Where | What the editor does |
 |---|---|
@@ -273,7 +276,7 @@ Cheats change the game **while it's running** (things like infinite HP or EXP mu
 > [!IMPORTANT]
 > Cheat codes only work for the **exact game version** they were written for. The editor reads your game's **build ID** from Ryujinx's log (v1.0.0 is `E968832CADE2AD7C`). You can also type it in: Ryujinx shows it at the top of **Manage Cheats**.
 
-Your cheats are filed in the **[`cheats`](cheats/README.md)** folder by game version, with a description and a **Tested on** result (Ryujinx / yuzu family / Switch) for each one, ready to share.
+Cheats are filed in the **[`cheats`](cheats/README.md)** folder by game version, with a description and a **Tested on** result (Ryujinx / yuzu family / Switch) for each one, ready to share. The included cheats haven't been tested yet, so they're all marked *untested*. If you try one, please report back.
 
 The editor only manages its own cheat file, so it never touches cheats you installed another way. Your cheat list is kept by the app, so removing cheats from the emulator doesn't lose them.
 
@@ -568,7 +571,7 @@ The stats for the post-game weapons (Sage Stick, Stella 023, Wonder Chomp) come 
 
 <br>
 
-No. A cheat code needs memory addresses found by reverse-engineering the exact game version, so the editor can only install codes that someone has already made and shared. There's also no "no random encounters" cheat needed: the remake has no random encounters, because enemies are visible on the map.
+No. A cheat code needs memory addresses found by reverse-engineering the exact game version, so the editor can only install codes that someone has already made and shared. It comes with 63 of those for v1.0.0, and you can add more. There's also no "no random encounters" cheat needed: the remake has no random encounters, because enemies are visible on the map.
 
 </details>
 
@@ -586,6 +589,7 @@ Click **Restore a backup…** and choose the newest backup from before your last
 ## 🙏 Credits
 
 - Item IDs and names: [Echocolat/SMR-save-edit-scripts](https://github.com/Echocolat/SMR-save-edit-scripts)
+- Cheat codes: **khuong** (the master code and cheats 00–31) and **怪盗B** on [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg) (cheats 32–33)
 - Walkthrough links: [Game8](https://game8.co/games/Super-Mario-RPG/archives/417834) and [IGN](https://www.ign.com/wikis/super-mario-rpg-switch-remake/Hidden_Treasure_Chest_Locations)
 - Equipment stats: [Nintendo Life](https://www.nintendolife.com/guides/super-mario-rpg-all-weapons-list), [Gamer Guides](https://gamerguides.com/super-mario-rpg-2023/guide/getting-started/basics/all-armor-in-super-mario-rpg), [Samurai Gamers](https://samurai-gamers.com/super-mario-rpg-remake/weapons-list-19/) and the [Super Mario Wiki](https://www.mariowiki.com/)
 

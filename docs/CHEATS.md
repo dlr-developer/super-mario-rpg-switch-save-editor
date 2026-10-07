@@ -58,12 +58,14 @@ Most codes work everywhere, but emulators don't behave identically, so **test a 
 
 ## Using cheats with the editor
 
+The editor **comes with 63 cheats for v1.0.0** (see the [list](../cheats/0100BC0018138000%20-%20Super%20Mario%20RPG/v1.0.0%20-%20E968832CADE2AD7C/README.md)), so for that version you can skip straight to step 2.
+
 1. **Back up your save:** click **Back up now…** at the top of the window.
-2. **Get a code** made for your build ID, for example from [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg), or make your own (see below).
-3. On the **Cheats** tab, click **Import cheat file…**, or **Add cheat…** and paste the code.
-4. **Turn on** the cheats you want: double-click a row, or select rows and click **Turn on/off**.
-5. Click **Install to emulator** (or **Export for Switch (SD card)…**).
-6. **Restart the game.** Cheats are loaded when the game starts.
+2. **Turn on** the cheats you want: double-click a row, or select rows and click **Turn on/off**. Where a cheat has variants (like *Player Damage x2* and *x3*), turn on only one; the descriptions say so.
+3. Click **Install to emulator** (or **Export for Switch (SD card)…**). The **master code** the set relies on is added automatically.
+4. **Restart the game.** Cheats are loaded when the game starts.
+
+**Adding more:** on the **Cheats** tab, click **Import cheat file…**, or **Add cheat…** and paste a code made for your build ID (for example from [CheatSlips](https://www.cheatslips.com/game/super-mario-rpg)), or make your own (see below).
 
 To stop a cheat, turn it off and click **Install to emulator** again, or click **Remove from emulator**. Your list stays in the app either way.
 
